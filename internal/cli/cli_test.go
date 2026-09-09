@@ -294,4 +294,3 @@ func TestFormatTaskHelpWithDocComments(t *testing.T) {
 		t.Errorf("expected passthrough description, got:\n%s", help)
 	}
 }
-

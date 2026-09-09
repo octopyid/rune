@@ -430,9 +430,11 @@ func unquote(s string) string {
 
 // applyDocComments parses doc-comments for task arguments and flags.
 // Supported patterns:
-//   # --flag: Description
-//   # arg: Description
-//   # *args: Description
+//
+//	# --flag: Description
+//	# arg: Description
+//	# *args: Description
+//
 // Comments not matching these patterns or referencing unknown parameters are ignored.
 func applyDocComments(task *ast.Task, comments []string) {
 	for _, raw := range comments {
@@ -474,4 +476,3 @@ func applyDocComments(task *ast.Task, comments []string) {
 		}
 	}
 }
-
