@@ -1,0 +1,167 @@
+name: Release Build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Target Release Tag (e.g. v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ""
+          - goos: linux
+            goarch: arm64
+            ext: ""
+          - goos: darwin
+            goarch: amd64
+            ext: ""
+          - goos: darwin
+            goarch: arm64
+            ext: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build Binary
+        run: |
+          mkdir -p dist
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
+            go build -trimpath -ldflags "-s -w -X main.version=${{ github.event.inputs.tag || github.ref_name }}" \
+            -o dist/rune-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/rune
+
+      - name: Attach Binary to Release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: dist/rune-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          tag: ${{ github.event.inputs.tag || github.ref_name }}
+          overwrite: true
+
+  checksums:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          mkdir -p /tmp/bin
+          gh release download "$TAG" --repo ${{ github.repository }} -p 'rune-*' -D /tmp/bin
+
+      - name: Generate Checksums
+        run: |
+          cd /tmp/bin
+          sha256sum rune-* > checksums.txt
+          cat checksums.txt
+
+      - name: Upload Checksums to Release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: /tmp/bin/checksums.txt
+          tag: ${{ github.event.inputs.tag || github.ref_name }}
+          overwrite: true
+
+  homebrew:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Generate Octopy ID Token
+        id: octopy
+        env:
+          APP_ID: ${{ secrets.OCTOPY_APP_ID }}
+          APP_KEY: ${{ secrets.OCTOPY_APP_PRIVATE_KEY }}
+        if: env.APP_ID != '' && env.APP_KEY != ''
+        uses: actions/create-github-app-token@v1
+        continue-on-error: true
+        with:
+          app-id: ${{ secrets.OCTOPY_APP_ID }}
+          private-key: ${{ secrets.OCTOPY_APP_PRIVATE_KEY }}
+          owner: octopyid
+          repositories: homebrew-tap
+
+      - name: Download macOS binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          gh release download "$TAG" --repo ${{ github.repository }} -p 'rune-darwin-*' -D /tmp/bin
+
+      - name: Compute checksums
+        id: hashes
+        run: |
+          echo "arm64=$(sha256sum /tmp/bin/rune-darwin-arm64 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "amd64=$(sha256sum /tmp/bin/rune-darwin-amd64 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Update octopyid/tap formula
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          ARM64: ${{ steps.hashes.outputs.arm64 }}
+          AMD64: ${{ steps.hashes.outputs.amd64 }}
+          HOMEBREW_TAP_TOKEN: ${{ steps.octopy.outputs.token || secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -n "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "Updating Homebrew formula in octopyid/homebrew-tap..."
+            git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/octopyid/homebrew-tap.git" tap
+            cd tap
+            VERSION="${TAG#v}"
+            printf '%s\n' \
+              'class Rune < Formula' \
+              '  desc "Project-local task runner that turns Runefiles into CLI commands"' \
+              '  homepage "https://github.com/octopyid/rune"' \
+              '  license "MIT"' \
+              '' \
+              '  on_macos do' \
+              '    on_arm do' \
+              "      url \"https://github.com/octopyid/rune/releases/download/${TAG}/rune-darwin-arm64\"" \
+              "      sha256 \"${ARM64}\"" \
+              '    end' \
+              '    on_intel do' \
+              "      url \"https://github.com/octopyid/rune/releases/download/${TAG}/rune-darwin-amd64\"" \
+              "      sha256 \"${AMD64}\"" \
+              '    end' \
+              '  end' \
+              '' \
+              '  def install' \
+              '    if Hardware::CPU.arm?' \
+              '      bin.install "rune-darwin-arm64" => "rune"' \
+              '    else' \
+              '      bin.install "rune-darwin-amd64" => "rune"' \
+              '    end' \
+              '  end' \
+              '' \
+              '  test do' \
+              '    assert_match "rune", shell_output("#{bin}/rune --version")' \
+              '  end' \
+              'end' > Formula/rune.rb
+            git config user.name "octopyid[bot]"
+            git config user.email "324101211+octopyid[bot]@users.noreply.github.com"
+            git add Formula/rune.rb
+            git commit -m "chore(formula): bump rune to ${VERSION}"
+            git push origin HEAD:main
+          else
+            echo "HOMEBREW_TAP_TOKEN secret is not set, skipping Homebrew formula update."
+          fi

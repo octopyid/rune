@@ -1,0 +1,35 @@
+# Rune task runner configuration for Rune itself
+
+#[Build the rune binary]
+build:
+    go build -ldflags "-s -w" -o ./bin/rune ./cmd/rune
+
+#[Run all tests]
+test:
+    go test -race -v ./...
+
+#[Run tests with coverage]
+test:coverage:
+    go test -coverprofile=coverage.out ./...
+
+#[Run full static analysis and linter]
+lint:
+    golangci-lint run
+
+#[Automatically fix linter issues]
+lint:fix:
+    golangci-lint run --fix
+
+#[Format Go code and organize imports]
+fmt:
+    goimports -w .
+    go fmt ./...
+
+#[Modernize Go syntax]
+fix:
+    go fix ./...
+
+#[Remove build artifacts]
+#[confirm: This will remove the ./bin directory and coverage files.]
+clean:
+    rm -rf ./bin coverage.out

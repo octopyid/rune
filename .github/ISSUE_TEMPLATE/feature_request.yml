@@ -1,0 +1,59 @@
+name: Feature Request
+description: Suggest an idea or enhancement for Rune
+title: "[FEAT]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for proposing an enhancement! Rune is intentionally simple, predictable, and opinionated. Please explain how your idea fits the CLI-first mental model.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a problem? A clear and concise description of the pain point.
+      placeholder: I am frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: A clear and concise description of what you want to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: syntax
+    attributes:
+      label: Proposed Syntax / Usage
+      description: How would this look in a Runefile or CLI invocation?
+      render: text
+      placeholder: |
+        task:
+            command
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: alignment
+    attributes:
+      label: Rune Design Principles Check
+      description: Rune strictly adheres to the boundaries documented in README.md.
+      options:
+        - label: Preserves zero external runtime dependencies (pure Go standard library).
+          required: true
+        - label: Follows the CLI-first mental model ("A task is a command").
+          required: true
+        - label: Avoids speculative plugin systems, background daemons, or build-system complexity.
+          required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context, references, or alternatives considered.
+    validations:
+      required: false

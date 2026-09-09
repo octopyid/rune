@@ -1,0 +1,100 @@
+name: Bug Report
+description: Report a reproducible problem or unexpected behavior in Rune
+title: "[BUG]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report an issue! Please provide sufficient detail so we can reproduce and fix it quickly.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what the problem is.
+      placeholder: When running `rune db:fresh`, ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: runefile
+    attributes:
+      label: Minimal Runefile
+      description: The minimal `Runefile` needed to reproduce the issue.
+      render: text
+      placeholder: |
+        #[Task description]
+        task:
+            echo "example"
+    validations:
+      required: false
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command Executed
+      description: The exact command you ran in your terminal.
+      render: bash
+      placeholder: rune ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Output / Exit Code
+      description: The actual output, error message, or stack trace returned by Rune.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Rune Version
+      description: Output of `rune --version`
+      placeholder: e.g. 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: go_version
+    attributes:
+      label: Go Version
+      description: Output of `go version`
+      placeholder: e.g. go version go1.26.0 darwin/arm64
+    validations:
+      required: false
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux (amd64)
+        - Linux (arm64)
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have verified that this issue has not already been reported.
+          required: true
+        - label: I can reproduce this issue on the latest release of Rune.
+          required: true
