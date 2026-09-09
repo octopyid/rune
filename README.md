@@ -234,6 +234,38 @@ compose *args:
 rune compose exec api sh -c "echo 'Health check'" --user=root
 ```
 
+### Documenting Arguments & Flags (Doc-Comments)
+
+Document task parameters and flags by placing a contiguous comment block directly before the task header:
+
+- Use `# --<flag>: Description` for boolean flags.
+- Use `# <arg>: Description` for positional arguments.
+- Use `# *<args>: Description` or `# <args>: Description` for passthrough arguments.
+
+```text
+#[Build Android APK]
+# target: Target build environment (dev, staging, prod)
+# --split: Build split-per-ABI APKs alongside universal APK
+# --minify: Enable ProGuard/R8 code shrinking and obfuscation
+build:apk target="dev" --split? --minify?:
+    ./gradlew assembleRelease
+```
+
+Running `rune build:apk --help` automatically renders these descriptions in the `Arguments:` and `Options:` tables:
+
+```text
+Arguments:
+  target                Target build environment (dev, staging, prod) [default: "dev"]
+
+Options:
+      --split           Build split-per-ABI APKs alongside universal APK
+      --minify          Enable ProGuard/R8 code shrinking and obfuscation
+  -h, --help            Display help for the given command
+  -v, --version         Display this application version
+```
+
+> **Note**: Comments that do not match declared parameter names (such as developer notes `# NOTE: ...` or `# TODO: ...`), comments separated by blank lines, and comments inside the task body are completely ignored.
+
 ### Interactive TTY & REPL
 
 Rune attaches the child process directly to your terminal's `stdin`, `stdout`, and `stderr`:

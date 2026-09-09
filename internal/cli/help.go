@@ -251,15 +251,24 @@ func FormatTaskHelp(task *ast.Task) string {
 		}
 		for _, p := range task.Parameters {
 			padding := strings.Repeat(" ", max(2, argWidth-len(p.Name)-2))
-			desc := "Required argument"
-			if p.HasDefault {
-				desc = fmt.Sprintf("Optional argument [default: %q]", p.DefaultValue)
+			desc := p.Description
+			if desc == "" {
+				desc = "Required argument"
+				if p.HasDefault {
+					desc = fmt.Sprintf("Optional argument [default: %q]", p.DefaultValue)
+				}
+			} else if p.HasDefault {
+				desc = fmt.Sprintf("%s [default: %q]", p.Description, p.DefaultValue)
 			}
 			fmt.Fprintf(&sb, "  %s%s%s\n", colorCmd(p.Name), padding, desc)
 		}
 		if task.Passthrough != nil {
 			padding := strings.Repeat(" ", max(2, argWidth-len(task.Passthrough.Name)-2))
-			fmt.Fprintf(&sb, "  %s%sPasses arbitrary arguments through to the underlying command\n", colorCmd(task.Passthrough.Name), padding)
+			desc := "Passes arbitrary arguments through to the underlying command"
+			if task.Passthrough.Description != "" {
+				desc = task.Passthrough.Description
+			}
+			fmt.Fprintf(&sb, "  %s%s%s\n", colorCmd(task.Passthrough.Name), padding, desc)
 		}
 		sb.WriteString("\n")
 	}
@@ -285,7 +294,11 @@ func FormatTaskHelp(task *ast.Task) string {
 	for _, f := range task.Flags {
 		prefix := fmt.Sprintf("      --%s", f.Name)
 		padding := strings.Repeat(" ", max(2, optWidth-len(prefix)))
-		fmt.Fprintf(&sb, "      %s%sOptional boolean flag\n", colorOption("--"+f.Name), padding)
+		desc := f.Description
+		if desc == "" {
+			desc = "Optional boolean flag"
+		}
+		fmt.Fprintf(&sb, "      %s%s%s\n", colorOption("--"+f.Name), padding, desc)
 	}
 
 	// 2. Global options next (perfectly aligned with task flags)

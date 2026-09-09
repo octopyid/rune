@@ -197,3 +197,70 @@ artisan *args *rest:
 		})
 	}
 }
+
+func TestParseDocComments(t *testing.T) {
+	input := `
+# Disconnected comment separated by blank line
+# --split: Should be ignored
+
+# NOTE: General note about build
+#[Build Android APK]
+# target: Target build environment
+# --split: Build split-per-ABI APKs alongside universal APK
+# --race?: Enable data race detector
+build target="dev" --split? --race?:
+    # Comment inside body:
+    # --split: Should be ignored
+    echo "Building {{target}}"
+
+# *args: Pass arbitrary flags to artisan
+#[Run artisan]
+artisan *args:
+    php artisan {{args}}
+
+greet name:
+    echo "Hello, {{name}}"
+`
+
+	file, err := Parse(strings.NewReader(input), "Runefile")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	// Check build task
+	build, ok := file.GetTask("build")
+	if !ok {
+		t.Fatal("task 'build' not found")
+	}
+	if len(build.Parameters) != 1 || build.Parameters[0].Description != "Target build environment" {
+		t.Errorf("expected target description 'Target build environment', got %q", build.Parameters[0].Description)
+	}
+	if len(build.Flags) != 2 {
+		t.Fatalf("expected 2 flags, got %d", len(build.Flags))
+	}
+	if build.Flags[0].Name != "split" || build.Flags[0].Description != "Build split-per-ABI APKs alongside universal APK" {
+		t.Errorf("split flag description mismatch: %+v", build.Flags[0])
+	}
+	if build.Flags[1].Name != "race" || build.Flags[1].Description != "Enable data race detector" {
+		t.Errorf("race flag description mismatch: %+v", build.Flags[1])
+	}
+
+	// Check artisan task
+	artisan, ok := file.GetTask("artisan")
+	if !ok {
+		t.Fatal("task 'artisan' not found")
+	}
+	if artisan.Passthrough == nil || artisan.Passthrough.Description != "Pass arbitrary flags to artisan" {
+		t.Errorf("artisan passthrough description mismatch: %+v", artisan.Passthrough)
+	}
+
+	// Check greet task (undocumented)
+	greet, ok := file.GetTask("greet")
+	if !ok {
+		t.Fatal("task 'greet' not found")
+	}
+	if len(greet.Parameters) != 1 || greet.Parameters[0].Description != "" {
+		t.Errorf("expected empty description for greet parameter, got %q", greet.Parameters[0].Description)
+	}
+}
+

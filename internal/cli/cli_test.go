@@ -257,3 +257,41 @@ func TestRouteBuiltinUIComponents(t *testing.T) {
 		t.Errorf("expected suggestion 'info', got: %v", action.Err)
 	}
 }
+
+func TestFormatTaskHelpWithDocComments(t *testing.T) {
+	task := &ast.Task{
+		Name:        "build:apk",
+		Description: "Build Android APK",
+		Parameters: []ast.Parameter{
+			{Name: "target", DefaultValue: "dev", HasDefault: true, Description: "Target build environment"},
+			{Name: "output", HasDefault: false, Description: "Output directory path"},
+		},
+		Flags: []ast.Flag{
+			{Name: "split", Description: "Build split-per-ABI APKs alongside universal APK"},
+			{Name: "minify", Description: ""}, // fallback test
+		},
+		Passthrough: &ast.Passthrough{
+			Name:        "args",
+			Description: "Pass extra flags to gradle",
+		},
+	}
+
+	help := FormatTaskHelp(task)
+
+	if !strings.Contains(help, "Target build environment [default: \"dev\"]") {
+		t.Errorf("expected target description with default, got:\n%s", help)
+	}
+	if !strings.Contains(help, "Output directory path") {
+		t.Errorf("expected output description, got:\n%s", help)
+	}
+	if !strings.Contains(help, "Build split-per-ABI APKs alongside universal APK") {
+		t.Errorf("expected split flag description, got:\n%s", help)
+	}
+	if !strings.Contains(help, "Optional boolean flag") {
+		t.Errorf("expected fallback for undocumented minify flag, got:\n%s", help)
+	}
+	if !strings.Contains(help, "Pass extra flags to gradle") {
+		t.Errorf("expected passthrough description, got:\n%s", help)
+	}
+}
+

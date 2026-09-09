@@ -13,7 +13,7 @@ import (
 	"github.com/octopyid/rune/internal/ui"
 )
 
-var Version = "1.0.0"
+var Version = "1.1.0"
 
 // RunContext encapsulates execution context for the CLI.
 type RunContext struct {

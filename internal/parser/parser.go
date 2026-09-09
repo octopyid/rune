@@ -44,8 +44,9 @@ func Parse(r io.Reader, filePath string) (*ast.File, error) {
 		currentTask *ast.Task
 		lineNum     int
 
-		pendingDesc    string
-		pendingConfirm string
+		pendingDesc        string
+		pendingConfirm     string
+		pendingDocComments []string
 
 		taskLineMap = make(map[string]int)
 	)
@@ -60,6 +61,7 @@ func Parse(r io.Reader, filePath string) (*ast.File, error) {
 
 		// Blank lines
 		if trimmed == "" {
+			pendingDocComments = nil
 			continue
 		}
 
@@ -98,6 +100,7 @@ func Parse(r io.Reader, filePath string) (*ast.File, error) {
 
 		// 4. Regular comments: # ...
 		if strings.HasPrefix(trimmed, "#") {
+			pendingDocComments = append(pendingDocComments, trimmed)
 			continue
 		}
 
@@ -117,11 +120,14 @@ func Parse(r io.Reader, filePath string) (*ast.File, error) {
 		}
 		taskLineMap[task.Name] = lineNum
 
-		// Attach accumulated metadata
+		// Attach accumulated metadata and doc-comments
 		task.Description = pendingDesc
 		task.Confirmation = pendingConfirm
+		applyDocComments(task, pendingDocComments)
+
 		pendingDesc = ""
 		pendingConfirm = ""
+		pendingDocComments = nil
 
 		tasks = append(tasks, task)
 		currentTask = task
@@ -421,3 +427,51 @@ func unquote(s string) string {
 	}
 	return s
 }
+
+// applyDocComments parses doc-comments for task arguments and flags.
+// Supported patterns:
+//   # --flag: Description
+//   # arg: Description
+//   # *args: Description
+// Comments not matching these patterns or referencing unknown parameters are ignored.
+func applyDocComments(task *ast.Task, comments []string) {
+	for _, raw := range comments {
+		trimmed := strings.TrimSpace(strings.TrimPrefix(raw, "#"))
+		before, after, ok := strings.Cut(trimmed, ":")
+		if !ok {
+			continue
+		}
+		namePart := strings.TrimSpace(before)
+		descPart := strings.TrimSpace(after)
+
+		// 1. Check for flags: # --flag: Description
+		if afterPrefix, isFlag := strings.CutPrefix(namePart, "--"); isFlag {
+			flagName := strings.TrimSuffix(strings.TrimSpace(afterPrefix), "?")
+			if flagName == "" {
+				continue
+			}
+			for i := range task.Flags {
+				if task.Flags[i].Name == flagName {
+					task.Flags[i].Description = descPart
+					break
+				}
+			}
+			continue
+		}
+
+		// 2. Check for passthrough: # *args: Description or # args: Description
+		if task.Passthrough != nil && (namePart == task.Passthrough.Name || namePart == "*"+task.Passthrough.Name) {
+			task.Passthrough.Description = descPart
+			continue
+		}
+
+		// 3. Check for positional parameters: # arg: Description
+		for i := range task.Parameters {
+			if task.Parameters[i].Name == namePart {
+				task.Parameters[i].Description = descPart
+				break
+			}
+		}
+	}
+}
+

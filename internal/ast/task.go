@@ -7,11 +7,13 @@ type Parameter struct {
 	Name         string
 	DefaultValue string
 	HasDefault   bool
+	Description  string
 }
 
 // Flag represents an optional boolean flag (e.g., --race?).
 type Flag struct {
-	Name string // e.g. "race"
+	Name        string // e.g. "race"
+	Description string
 }
 
 // FullName returns the CLI flag with dashes, e.g. "--race".
@@ -21,7 +23,8 @@ func (f Flag) FullName() string {
 
 // Passthrough represents explicit passthrough arguments (e.g., *args).
 type Passthrough struct {
-	Name string // e.g. "args"
+	Name        string // e.g. "args"
+	Description string
 }
 
 // Task represents a single task definition.

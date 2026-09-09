@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-10
+
+### Added
+
+- **Doc-Comments for Task Arguments & Flags**:
+  - Support natural doc-comments directly preceding task headers to document CLI arguments and flags.
+  - Parse `# --<flag>: <desc>` for boolean flags, `# <arg>: <desc>` for positional arguments, and `# *<args>: <desc>` for passthrough arguments.
+  - Automatically render custom descriptions into `Arguments:` and `Options:` help tables (`rune <task> --help`).
+  - Strict matching against declared task parameters; unassociated comments (like `# NOTE: ...` or `# TODO: ...`), comments separated by blank lines, and comments inside the task body are ignored.
+
 ## [1.0.0] - 2026-09-10
 
 Initial release of Rune — a small, predictable, and opinionated task runner for Go and modern development workflows, inspired by Make, Just, and Laravel Artisan.
@@ -67,5 +77,6 @@ Initial release of Rune — a small, predictable, and opinionated task runner fo
   - Pull request template (`.github/PULL_REQUEST_TEMPLATE.md`).
   - GitHub Issue Forms (`.github/ISSUE_TEMPLATE/bug_report.yml`, `feature_request.yml`, `config.yml`).
 
-[Unreleased]: https://github.com/octopyid/rune/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/octopyid/rune/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/octopyid/rune/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/octopyid/rune/releases/tag/v1.0.0
