@@ -48,6 +48,7 @@ func Parse(r io.Reader, filePath string) (*ast.File, error) {
 		pendingConfirm     string
 		pendingDir         string
 		pendingEnv         map[string]string
+		pendingPrivate     bool
 		pendingDocComments []string
 
 		taskLineMap = make(map[string]int)
@@ -87,7 +88,9 @@ func Parse(r io.Reader, filePath string) (*ast.File, error) {
 		// 3. Metadata attributes: #[...]
 		if strings.HasPrefix(trimmed, "#[") && strings.HasSuffix(trimmed, "]") {
 			content := strings.TrimSpace(trimmed[2 : len(trimmed)-1])
-			if after, ok := strings.CutPrefix(content, "confirm:"); ok {
+			if content == "private" {
+				pendingPrivate = true
+			} else if after, ok := strings.CutPrefix(content, "confirm:"); ok {
 				msg := strings.TrimSpace(after)
 				pendingConfirm = msg
 			} else if after, ok := strings.CutPrefix(content, "description:"); ok {
@@ -156,12 +159,14 @@ func Parse(r io.Reader, filePath string) (*ast.File, error) {
 		task.Confirmation = pendingConfirm
 		task.Dir = pendingDir
 		task.Env = pendingEnv
+		task.Private = pendingPrivate
 		applyDocComments(task, pendingDocComments)
 
 		pendingDesc = ""
 		pendingConfirm = ""
 		pendingDir = ""
 		pendingEnv = nil
+		pendingPrivate = false
 		pendingDocComments = nil
 
 		tasks = append(tasks, task)

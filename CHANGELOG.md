@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-11
+
+### Added
+
+- **Private Tasks (`#[private]` / `#[internal]`)**:
+  - Support declaring internal helper tasks using `#[private]` or `#[internal]` attributes.
+  - Private tasks remain fully executable directly by name and as task dependencies, but are excluded from task listings (`rune`, `rune list`, `--help`) and shell autocompletion.
+- **Task Dependency Tree (`--tree`)**:
+  - Visualize task dependency hierarchies using the `--tree` global flag (e.g. `rune --tree` or `rune <task> --tree`).
+  - Zero-dependency custom ASCII/Unicode tree formatter displaying tree branches (`├──`, `└──`, `│`), task parameters, and boolean flags (`--split?`).
+  - Includes circular dependency detection with cycle markers (`[cycle detected]`).
+
+### Changed
+
+- **Shell Autocomplete Overhaul**:
+  - Rich descriptions for tasks, namespaces, and flags in Zsh completion, styled with aligned `--` columns matching GitHub CLI (`gh`).
+  - Fix colon handling in Zsh: candidate names with namespaces (e.g. `assets:icons`, `test:coverage`) escape colons so `_describe` preserves candidate names intact.
+  - Contextual flag filtering: typing `rune <TAB>` focuses on available tasks, while typing `-` or `--` switches to flag suggestions.
+  - Task-specific flag completion: typing `rune <task> -<TAB>` suggests task-specific boolean flags (with their inline doc comments) alongside global flags.
+
 ## [1.4.1] - 2026-09-11
 
 ### Fixed
@@ -134,7 +154,8 @@ Initial release of Rune — a small, predictable, and opinionated task runner fo
   - Pull request template (`.github/PULL_REQUEST_TEMPLATE.md`).
   - GitHub Issue Forms (`.github/ISSUE_TEMPLATE/bug_report.yml`, `feature_request.yml`, `config.yml`).
 
-[Unreleased]: https://github.com/octopyid/rune/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/octopyid/rune/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/octopyid/rune/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/octopyid/rune/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/octopyid/rune/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/octopyid/rune/compare/v1.3.1...v1.3.2

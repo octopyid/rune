@@ -16,6 +16,7 @@ type GlobalFlags struct {
 	Yes     bool
 	Verbose bool
 	Time    bool
+	Tree    bool
 }
 
 // BoundArgs contains the resolved arguments and options for a task invocation.
@@ -82,6 +83,11 @@ func ParseGlobalFlags(args []string) (GlobalFlags, string, []string, error) {
 			i++
 			continue
 		}
+		if arg == "--tree" {
+			gf.Tree = true
+			i++
+			continue
+		}
 
 		// First non-flag argument is the task name (or namespace)
 		if taskName == "" && !strings.HasPrefix(arg, "-") {
@@ -100,6 +106,7 @@ func ParseGlobalFlags(args []string) (GlobalFlags, string, []string, error) {
 				"--yes", "-y",
 				"--verbose",
 				"--time",
+				"--tree",
 			}
 			sugg := Suggest(arg, globalCandidates)
 			if sugg != "" {

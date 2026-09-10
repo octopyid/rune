@@ -43,6 +43,8 @@ rune compose up --build  # forward passthrough arguments to underlying tools
 - **Command-line Arguments & Flags** — Accept positional arguments, default values, and boolean flags (`--race?`).
 - **Per-Task Help Menus** — Auto-generated `--help` for tasks and namespaces, with doc-comments for parameters.
 - **Dependency Execution** — Run prerequisite tasks with cycle detection and deduplication.
+- **Dependency Tree Inspection** — Inspect execution graphs in Unicode box-drawing format with `--tree`.
+- **Private Tasks** — Hide internal or helper tasks from discovery menus using `#[private]`.
 - **Interactive Safety Prompts** — Guard destructive tasks with `#[confirm: ...]` prompts before running.
 - **Dry-run Mode** — Preview the resolved execution order with `--dry-run`.
 - **Environment Integration** — Automatically loads `.env` files beside your `Runefile` and sets task context variables.
@@ -144,6 +146,7 @@ task: dep1 dep2           # Prerequisites executed before task
 #[confirm: Are you sure?] # Prompt user before executing task
 #[dir: path/to/dir]       # Execute task in specific working directory
 #[env: KEY=VAL; KEY2=V2]  # Task-scoped environment variables
+#[private]                # Hide internal task from listing and autocompletion
 # arg: Description        # Document argument in help menu
 # --flag: Description     # Document flag in help menu
 ```
@@ -320,6 +323,24 @@ build:linux:
 - Task-scoped variables override inherited process environment variables and `.env` values for that task.
 - Dependencies maintain their own isolated task environments.
 
+### Private Tasks (`#[private]`)
+
+Hide internal helper or prerequisite tasks from public discovery menus (`rune`, `rune list`, and shell completions) using `#[private]`:
+
+```text
+#[private]
+ensure:certs:
+    ./scripts/generate-certs.sh
+
+deploy: ensure:certs
+    ./scripts/deploy.sh
+```
+
+- Private tasks do not appear in `rune` or `rune --help` command listings.
+- Private tasks remain fully executable when invoked directly by name (`rune ensure:certs`).
+- Private tasks can be freely referenced as dependencies by other tasks.
+- If all tasks in a namespace are private, the namespace itself is hidden from the root command list.
+
 ### Terminal I/O & Process Execution
 
 `rune` connects child processes directly to the terminal's standard streams (`stdin`, `stdout`, `stderr`):
@@ -449,6 +470,32 @@ rune --dry-run release
      $ go test ./...
   3. release
      $ ./release.sh
+```
+
+### Dependency Tree (`--tree`)
+
+Inspect the hierarchical dependency tree of a task or the entire `Runefile` without executing any commands:
+
+```bash
+rune release --tree
+# or: rune --tree release
+```
+
+```text
+release
+├── build (dir: backend)
+└── test
+    ├── setup:certs [private]
+    └── build (dir: backend) (deduped)
+```
+
+- **Box-Drawing Tree**: Uses standard Unicode box-drawing characters (`├──`, `└──`, `│   `).
+- **Deduplication (`(deduped)`)**: Tasks already expanded earlier in the tree are marked as `(deduped)` to avoid redundant sub-branches.
+- **Context Badges**: Highlights task attributes inline such as `[private]` and `(dir: <path>)`.
+- **Project-Wide Overview**: Run `rune --tree` without a task name to visualize dependency trees for all tasks in your `Runefile`:
+
+```bash
+rune --tree
 ```
 
 ### Environment Handling

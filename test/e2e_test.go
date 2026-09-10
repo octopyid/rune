@@ -490,3 +490,89 @@ back: front
 		t.Errorf("expected timing output for both tasks and total, got:\n%s", stdout)
 	}
 }
+
+func TestE2EPrivateAndTree(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	runefile := `
+#[Build task]
+build:
+    echo "BUILD DONE"
+
+#[private]
+#[Secret setup]
+secret:setup:
+    echo "SECRET DONE"
+
+#[Deploy application]
+deploy: secret:setup build
+    echo "DEPLOY DONE"
+
+#[Clean artifacts]
+clean:
+    echo "CLEAN DONE"
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "Runefile"), []byte(runefile), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. rune (root listing) should hide private task
+	stdout, stderr, code := runRune(tmpDir, "", "list")
+	if code != 0 {
+		t.Fatalf("expected code 0, got %d. stderr: %s", code, stderr)
+	}
+	if strings.Contains(stdout, "secret:setup") {
+		t.Errorf("expected private task 'secret:setup' to be hidden in listing, got:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "build") || !strings.Contains(stdout, "deploy") || !strings.Contains(stdout, "clean") {
+		t.Errorf("expected public tasks in listing, got:\n%s", stdout)
+	}
+
+	// 2. Direct execution of private task should work
+	stdout, stderr, code = runRune(tmpDir, "", "secret:setup")
+	if code != 0 {
+		t.Fatalf("expected code 0 for private task execution, got %d. stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "SECRET DONE") {
+		t.Errorf("expected 'SECRET DONE', got:\n%s", stdout)
+	}
+
+	// 3. Execution of task depending on private task should work
+	stdout, stderr, code = runRune(tmpDir, "", "deploy")
+	if code != 0 {
+		t.Fatalf("expected code 0 for deploy, got %d. stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "SECRET DONE") || !strings.Contains(stdout, "BUILD DONE") || !strings.Contains(stdout, "DEPLOY DONE") {
+		t.Errorf("expected all tasks in plan to execute, got:\n%s", stdout)
+	}
+
+	// 4. rune deploy --tree
+	stdout, stderr, code = runRune(tmpDir, "", "deploy", "--tree")
+	if code != 0 {
+		t.Fatalf("expected code 0 for deploy --tree, got %d. stderr: %s", code, stderr)
+	}
+	expectedDeployTree := `deploy
+├── secret:setup [private]
+└── build`
+	if !strings.Contains(stdout, expectedDeployTree) {
+		t.Errorf("expected deploy tree to contain:\n%s\ngot:\n%s", expectedDeployTree, stdout)
+	}
+
+	// 5. rune --tree (root tree)
+	stdout, stderr, code = runRune(tmpDir, "", "--tree")
+	if code != 0 {
+		t.Fatalf("expected code 0 for rune --tree, got %d. stderr: %s", code, stderr)
+	}
+	// Root tree should have deploy, build, clean
+	if !strings.Contains(stdout, "deploy") || !strings.Contains(stdout, "build") || !strings.Contains(stdout, "clean") {
+		t.Errorf("expected public tasks in file tree, got:\n%s", stdout)
+	}
+	// Root tree should NOT have secret:setup as a root node
+	lines := strings.Split(stdout, "\n")
+	for _, l := range lines {
+		if strings.HasPrefix(l, "secret:setup") {
+			t.Errorf("private task 'secret:setup' should not be a root tree, got line: %q", l)
+		}
+	}
+}
+

@@ -35,6 +35,7 @@ var globalOptions = []optionItem{
 	{short: "-y", long: "--yes", desc: "Do not ask any interactive question (bypass confirmation)"},
 	{short: "", long: "--verbose", desc: "Display commands before executing them"},
 	{short: "", long: "--time", desc: "Display task execution duration"},
+	{short: "", long: "--tree", desc: "Display the task dependency tree"},
 }
 
 type commandEntry struct {
@@ -93,18 +94,17 @@ func GetBuiltinTask(name string) *ast.Task {
 		return &ast.Task{
 			Name:        "completion",
 			Description: "Dump the shell completion script",
-			Parameters:  []ast.Parameter{{Name: "shell"}},
-		}
-	case "list":
-		return &ast.Task{
-			Name:        "list",
-			Description: "List commands",
+			Parameters: []ast.Parameter{
+				{Name: "shell", Description: "The shell type (bash, zsh, fish)"},
+			},
 		}
 	case "help":
 		return &ast.Task{
 			Name:        "help",
 			Description: "Display help for a command",
-			Parameters:  []ast.Parameter{{Name: "command", HasDefault: true, DefaultValue: ""}},
+			Parameters: []ast.Parameter{
+				{Name: "command_name", Description: "The command name", DefaultValue: "help", HasDefault: true},
+			},
 		}
 	default:
 		return nil
@@ -135,7 +135,7 @@ func FormatRootHelp(file *ast.File) string {
 		cmdMap[b.Name] = b.Desc
 	}
 	if file != nil {
-		for _, t := range file.RootTasks() {
+		for _, t := range file.PublicRootTasks() {
 			cmdMap[t.Name] = t.Description
 		}
 	}
@@ -156,7 +156,7 @@ func FormatRootHelp(file *ast.File) string {
 		}
 	}
 	if file != nil {
-		for _, t := range file.Tasks {
+		for _, t := range file.PublicTasks() {
 			if len(t.Name)+4 > cmdWidth {
 				cmdWidth = len(t.Name) + 4
 			}
@@ -171,11 +171,14 @@ func FormatRootHelp(file *ast.File) string {
 
 	// 2. Namespaced tasks grouped under single-space indented namespace headers
 	if file != nil {
-		namespaces := append([]string(nil), file.Namespaces()...)
+		namespaces := append([]string(nil), file.PublicNamespaces()...)
 		sort.Strings(namespaces)
 		for _, ns := range namespaces {
+			tasks := file.PublicTasksInNamespace(ns)
+			if len(tasks) == 0 {
+				continue
+			}
 			fmt.Fprintf(&sb, " %s\n", colorNs(ns))
-			tasks := file.TasksInNamespace(ns)
 			sort.Slice(tasks, func(i, j int) bool {
 				return tasks[i].Name < tasks[j].Name
 			})
@@ -194,7 +197,7 @@ func FormatRootHelp(file *ast.File) string {
 func FormatNamespaceHelp(file *ast.File, ns string) string {
 	var sb strings.Builder
 
-	tasks := file.TasksInNamespace(ns)
+	tasks := file.PublicTasksInNamespace(ns)
 	sort.Slice(tasks, func(i, j int) bool {
 		return tasks[i].Name < tasks[j].Name
 	})

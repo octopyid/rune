@@ -398,3 +398,58 @@ test:
 		}
 	}
 }
+
+func TestParsePrivateAttribute(t *testing.T) {
+	input := `
+#[Build task]
+build:
+    go build ./...
+
+#[private]
+#[Clean certs]
+setup:certs:
+    ./certs.sh
+
+#[deploy]
+deploy: setup:certs
+    ./deploy.sh
+`
+	file, err := Parse(strings.NewReader(input), "Runefile")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	build, ok := file.GetTask("build")
+	if !ok || build.Private {
+		t.Errorf("expected build to not be private, got ok=%v, private=%v", ok, build.Private)
+	}
+
+	certs, ok := file.GetTask("setup:certs")
+	if !ok || !certs.Private {
+		t.Errorf("expected setup:certs to be private, got ok=%v, private=%v", ok, certs.Private)
+	}
+
+	deploy, ok := file.GetTask("deploy")
+	if !ok || deploy.Private {
+		t.Errorf("expected deploy to not be private, got ok=%v, private=%v", ok, deploy.Private)
+	}
+
+	// Verify File helper methods
+	publicNames := file.PublicTaskNames()
+	if len(publicNames) != 2 {
+		t.Fatalf("expected 2 public tasks, got %d: %v", len(publicNames), publicNames)
+	}
+	if publicNames[0] != "build" || publicNames[1] != "deploy" {
+		t.Errorf("expected [build, deploy], got %v", publicNames)
+	}
+
+	publicRoot := file.PublicRootTasks()
+	if len(publicRoot) != 2 {
+		t.Fatalf("expected 2 public root tasks, got %d", len(publicRoot))
+	}
+
+	publicNs := file.PublicNamespaces()
+	if len(publicNs) != 0 {
+		t.Errorf("expected 0 public namespaces (setup only had private tasks), got %v", publicNs)
+	}
+}

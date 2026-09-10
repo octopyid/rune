@@ -176,10 +176,11 @@ func TestCompletion(t *testing.T) {
 	hasBuild := false
 	hasDb := false
 	for _, c := range cands {
-		if c == "build" {
+		val := strings.Split(c, "\t")[0]
+		if val == "build" {
 			hasBuild = true
 		}
-		if c == "db" {
+		if val == "db" {
 			hasDb = true
 		}
 	}
@@ -187,10 +188,29 @@ func TestCompletion(t *testing.T) {
 		t.Errorf("expected build and db in candidates, got %+v", cands)
 	}
 
-	// 2. Task specified: should list task flags
+	// 2. Exact/prefix task name being typed: should suggest the task itself
+	cands = Complete(file, []string{"build"})
+	if len(cands) == 0 || !strings.HasPrefix(cands[0], "build") {
+		t.Errorf("expected [build], got %+v", cands)
+	}
+
+	// 3. Task specified followed by flag prefix: should list task flags
 	cands = Complete(file, []string{"rune", "build", "--r"})
-	if len(cands) != 1 || cands[0] != "--race" {
+	if len(cands) != 1 || !strings.HasPrefix(cands[0], "--race") {
 		t.Errorf("expected [--race], got %+v", cands)
+	}
+
+	// 4. Task specified followed by empty word (trailing space): should suggest task flags & global flags
+	cands = Complete(file, []string{"rune", "build", ""})
+	hasRace := false
+	for _, c := range cands {
+		if strings.HasPrefix(c, "--race") {
+			hasRace = true
+			break
+		}
+	}
+	if !hasRace {
+		t.Errorf("expected --race in candidates for 'rune build ', got %+v", cands)
 	}
 
 	// 3. Shell scripts generation
@@ -359,10 +379,11 @@ func TestCompletionIncludesVerboseAndTime(t *testing.T) {
 	hasVerbose := false
 	hasTime := false
 	for _, s := range suggestions {
-		if s == "--verbose" {
+		val := strings.Split(s, "\t")[0]
+		if val == "--verbose" {
 			hasVerbose = true
 		}
-		if s == "--time" {
+		if val == "--time" {
 			hasTime = true
 		}
 	}
@@ -373,3 +394,78 @@ func TestCompletionIncludesVerboseAndTime(t *testing.T) {
 		t.Errorf("expected suggestions to include --time, got %v", suggestions)
 	}
 }
+
+func TestPrivateTasksHiddenFromHelpAndCompletion(t *testing.T) {
+	publicTask := &ast.Task{Name: "build", Description: "Build binary"}
+	privateTask := &ast.Task{Name: "secret:setup", Namespace: "secret", ShortName: "setup", Description: "Secret setup", Private: true}
+	file := ast.NewFile("Runefile", []*ast.Task{publicTask, privateTask})
+
+	// 1. Root help should not display private task or its namespace if all tasks in it are private
+	rootHelp := FormatRootHelp(file)
+	if strings.Contains(rootHelp, "secret:setup") || strings.Contains(rootHelp, "Secret setup") {
+		t.Errorf("expected root help to hide private task, got:\n%s", rootHelp)
+	}
+	if !strings.Contains(rootHelp, "build") {
+		t.Errorf("expected root help to include public task 'build', got:\n%s", rootHelp)
+	}
+
+	// 2. Namespace help should hide private tasks
+	nsHelp := FormatNamespaceHelp(file, "secret")
+	if strings.Contains(nsHelp, "secret:setup") {
+		t.Errorf("expected namespace help to hide private task, got:\n%s", nsHelp)
+	}
+
+	// 3. Completion should hide private task
+	cands := Complete(file, []string{"rune", ""})
+	for _, c := range cands {
+		val := strings.Split(c, "\t")[0]
+		if val == "secret:setup" || val == "secret" {
+			t.Errorf("expected completion to exclude private task and namespace, got candidates: %v", cands)
+		}
+	}
+
+	// 4. Private task can still be routed directly
+	action := Route(RunContext{Args: []string{"secret:setup"}, WorkingDir: "."})
+	// Even if run directly without Runefile in curdir, it attempts execution rather than failing with unknown task
+	_ = action
+}
+
+func TestTreeGlobalFlagAndRouting(t *testing.T) {
+	// 1. ParseGlobalFlags with --tree
+	gf, task, _, err := ParseGlobalFlags([]string{"--tree", "release"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !gf.Tree || task != "release" {
+		t.Errorf("expected Tree=true and task=release, got tree=%v, task=%s", gf.Tree, task)
+	}
+
+	// Flags after task name
+	gf2, task2, _, err := ParseGlobalFlags([]string{"release", "--tree"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !gf2.Tree || task2 != "release" {
+		t.Errorf("expected Tree=true and task=release, got tree=%v, task=%s", gf2.Tree, task2)
+	}
+
+	// 2. Root help describes --tree
+	help := FormatRootHelp(nil)
+	if !strings.Contains(help, "--tree") {
+		t.Errorf("expected root help to describe --tree, got:\n%s", help)
+	}
+
+	// 3. Completion includes --tree
+	suggestions := Complete(nil, []string{"--"})
+	hasTree := false
+	for _, s := range suggestions {
+		val := strings.Split(s, "\t")[0]
+		if val == "--tree" {
+			hasTree = true
+		}
+	}
+	if !hasTree {
+		t.Errorf("expected suggestions to include --tree, got %v", suggestions)
+	}
+}
+

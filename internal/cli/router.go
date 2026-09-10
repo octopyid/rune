@@ -9,11 +9,13 @@ import (
 	"strings"
 
 	"github.com/octopyid/rune/internal/ast"
+	"github.com/octopyid/rune/internal/graph"
 	"github.com/octopyid/rune/internal/parser"
 	"github.com/octopyid/rune/internal/ui"
 )
 
-var Version = "1.4.1"
+// Version is the current Rune CLI release version.
+var Version = "1.5.0"
 
 // RunContext encapsulates execution context for the CLI.
 type RunContext struct {
@@ -33,6 +35,7 @@ const (
 	ActionVersion
 	ActionCompletion
 	ActionExecute
+	ActionTree
 )
 
 type Action struct {
@@ -104,7 +107,8 @@ func Route(ctx RunContext) Action {
 		}
 
 		if args[0] == "__complete" {
-			rfPath, _ := FindRunefile(ctx.WorkingDir, "")
+			gf, _, _, _ := ParseGlobalFlags(args[1:])
+			rfPath, _ := FindRunefile(ctx.WorkingDir, gf.File)
 			var file *ast.File
 			if rfPath != "" {
 				file, _ = parser.ParseFile(rfPath)
@@ -157,8 +161,33 @@ func Route(ctx RunContext) Action {
 		}
 	}
 
-	// 5. If no task specified: show root help
+	// 5. If no task specified: show root help or root tree
 	if taskName == "" {
+		if gf.Tree {
+			if file == nil {
+				return Action{
+					Kind:     ActionNone,
+					Err:      fmt.Errorf("no Runefile found in current directory or parents"),
+					ExitCode: 1,
+				}
+			}
+			treeOut, err := graph.FormatFileTree(file)
+			if err != nil {
+				return Action{
+					Kind:     ActionNone,
+					Err:      err,
+					ExitCode: 1,
+				}
+			}
+			return Action{
+				Kind:        ActionTree,
+				Output:      treeOut + "\n",
+				File:        file,
+				GlobalFlags: gf,
+				ExitCode:    0,
+			}
+		}
+
 		return Action{
 			Kind:        ActionHelp,
 			Output:      FormatRootHelp(file) + "\n",
@@ -288,6 +317,40 @@ func Route(ctx RunContext) Action {
 
 	// If task does not exist, check if taskName is a namespace (e.g. 'rune db' or 'rune db --help')
 	if !taskExists && file.IsNamespace(taskName) {
+		if gf.Tree {
+			tasks := file.PublicTasksInNamespace(taskName)
+			if len(tasks) == 0 {
+				return Action{
+					Kind:        ActionTree,
+					Output:      fmt.Sprintf("No public tasks in namespace '%s'.\n", taskName),
+					File:        file,
+					GlobalFlags: gf,
+					ExitCode:    0,
+				}
+			}
+			var sb strings.Builder
+			for i, t := range tasks {
+				tree, err := graph.FormatTaskTree(file, t)
+				if err != nil {
+					return Action{
+						Kind:     ActionNone,
+						Err:      err,
+						ExitCode: 1,
+					}
+				}
+				if i > 0 {
+					sb.WriteString("\n\n")
+				}
+				sb.WriteString(tree)
+			}
+			return Action{
+				Kind:        ActionTree,
+				Output:      sb.String() + "\n",
+				File:        file,
+				GlobalFlags: gf,
+				ExitCode:    0,
+			}
+		}
 		return Action{
 			Kind:        ActionHelp,
 			Output:      FormatNamespaceHelp(file, taskName) + "\n",
@@ -320,6 +383,26 @@ func Route(ctx RunContext) Action {
 			Kind:        ActionHelp,
 			Output:      FormatTaskHelp(task) + "\n",
 			TargetTask:  task,
+			GlobalFlags: gf,
+			ExitCode:    0,
+		}
+	}
+
+	// 8. If tree flag is set on task: show task dependency tree
+	if gf.Tree {
+		treeOut, err := graph.FormatTaskTree(file, task)
+		if err != nil {
+			return Action{
+				Kind:     ActionNone,
+				Err:      err,
+				ExitCode: 1,
+			}
+		}
+		return Action{
+			Kind:        ActionTree,
+			Output:      treeOut + "\n",
+			TargetTask:  task,
+			File:        file,
 			GlobalFlags: gf,
 			ExitCode:    0,
 		}

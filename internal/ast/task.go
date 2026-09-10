@@ -36,6 +36,7 @@ type Task struct {
 	Confirmation string            // confirmation message, or empty if none
 	Dir          string            // working directory relative to Runefile dir, or empty
 	Env          map[string]string // task-scoped environment variables
+	Private      bool              // whether task is hidden from listing and autocompletion
 	Parameters   []Parameter       // positional arguments (required and default)
 	Flags        []Flag            // optional boolean flags
 	Passthrough  *Passthrough      // optional passthrough (*args)
@@ -129,6 +130,61 @@ func (f *File) AllTaskNames() []string {
 	names := make([]string, len(f.Tasks))
 	for i, t := range f.Tasks {
 		names[i] = t.Name
+	}
+	return names
+}
+
+// PublicTasks returns all non-private tasks.
+func (f *File) PublicTasks() []*Task {
+	var list []*Task
+	for _, t := range f.Tasks {
+		if !t.Private {
+			list = append(list, t)
+		}
+	}
+	return list
+}
+
+// PublicRootTasks returns all non-private tasks that do not belong to any namespace.
+func (f *File) PublicRootTasks() []*Task {
+	var list []*Task
+	for _, t := range f.rootList {
+		if !t.Private {
+			list = append(list, t)
+		}
+	}
+	return list
+}
+
+// PublicTasksInNamespace returns all non-private tasks belonging to the given namespace.
+func (f *File) PublicTasksInNamespace(ns string) []*Task {
+	var list []*Task
+	for _, t := range f.nsMap[ns] {
+		if !t.Private {
+			list = append(list, t)
+		}
+	}
+	return list
+}
+
+// PublicNamespaces returns unique namespaces that contain at least one public task.
+func (f *File) PublicNamespaces() []string {
+	var list []string
+	for _, ns := range f.nsList {
+		if len(f.PublicTasksInNamespace(ns)) > 0 {
+			list = append(list, ns)
+		}
+	}
+	return list
+}
+
+// PublicTaskNames returns a list of non-private task names.
+func (f *File) PublicTaskNames() []string {
+	var names []string
+	for _, t := range f.Tasks {
+		if !t.Private {
+			names = append(names, t.Name)
+		}
 	}
 	return names
 }
