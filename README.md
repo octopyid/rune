@@ -13,7 +13,7 @@
     <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge&color=3d9970" alt="License" />
   </a>
   <a href="https://go.dev">
-    <img src="https://img.shields.io/badge/Go-1.21%2B-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go" />
+    <img src="https://img.shields.io/badge/Go-1.22%2B-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go" />
   </a>
 </p>
 
@@ -21,70 +21,68 @@
 
 ## About Rune
 
-Rune is a project-local task runner written in Go. It turns your `Runefile` into a self-documenting CLI — every task becomes a real command with arguments, flags, namespaces, and a generated `--help` menu.
+`rune` is a project-local task runner written in Go. It lets you define and run project-specific tasks from a `Runefile`, with support for arguments, boolean flags, task namespaces (`db:migrate`), and per-task help menus.
 
-Inspired by the mental model of **Laravel Artisan**: every task is a first-class CLI command, not a build target. Make is powerful, Just is simple — but neither supports colon namespaces or boolean flags out of the box. Rune does.
+Like `just`, `rune` is a command runner rather than a build system — tasks run sequentially without file dependency graphs or `.PHONY` boilerplate.
 
 ```bash
-rune build --race        # boolean flags, not ENV=var workarounds
-rune db:migrate          # colon namespaces that actually work
-rune --dry-run release   # inspect the full execution plan first
-rune compose up --build  # full passthrough to any underlying tool
+rune build --race        # pass boolean flags directly
+rune db:migrate          # run tasks organized by namespace
+rune --dry-run release   # inspect the execution plan without running commands
+rune compose up --build  # forward passthrough arguments to underlying tools
 ```
 
 > [!NOTE]
-> Rune searches for a `Runefile` starting from the current directory and traversing up to parent directories, so you can invoke `rune` from any subdirectory within your project.
+> `rune` searches for a `Runefile` starting from the current directory and traversing parent directories, so you can invoke tasks from any subdirectory within your project.
 
 ---
 
 ## Key Features
 
-- **Colon Namespaces** — Organize tasks with `rune db:migrate` instead of flat, hyphenated names.
-- **Boolean Flags** — Pass `--race` or `--verbose` directly without `ENV=var` workarounds.
-- **Auto-generated `--help`** — Every task has its own help menu generated from the `Runefile`.
-- **Dependency Deduplication** — A task runs exactly once no matter how many dependants require it.
-- **Interactive Confirmation** — Protect destructive tasks with a built-in confirmation prompt.
-- **Dry-run Mode** — Simulate the full execution plan without any side effects.
-
-### Comparison
-
-|  | Make | Just | Rune |
-| :--- | :---: | :---: | :---: |
-| Positional arguments | `ENV=var` | ✓ | ✓ |
-| Boolean flags (`--flag`) | ✗ | ✗ | ✓ |
-| Auto-generated `--help` | ✗ | ✗ | ✓ |
-| Colon namespaces (`db:fresh`) | ✗ | ✗ | ✓ |
-| Interactive confirmation | ✗ | ✗ | ✓ |
-| Shell completion | Partial | Partial | ✓ |
-| Dependency deduplication | ✓ | ✗ | ✓ |
+- **Namespaced Tasks** — Organize related tasks under namespaces (e.g. `rune db:migrate`, `rune db:seed`).
+- **Command-line Arguments & Flags** — Accept positional arguments, default values, and boolean flags (`--race?`).
+- **Per-Task Help Menus** — Auto-generated `--help` for tasks and namespaces, with doc-comments for parameters.
+- **Dependency Execution** — Run prerequisite tasks with cycle detection and deduplication.
+- **Interactive Safety Prompts** — Guard destructive tasks with `#[confirm: ...]` prompts before running.
+- **Dry-run Mode** — Preview the resolved execution order with `--dry-run`.
+- **Environment Integration** — Automatically loads `.env` files beside your `Runefile` and sets task context variables.
+- **Shell Completion** — Tab completion scripts for Bash, Zsh, and Fish.
 
 ---
 
 ## Install
 
-**Homebrew (macOS / Linux)**
+### Shell Script (macOS & Linux)
+
+Install the latest pre-compiled binary into `/usr/local/bin` (or `~/.local/bin`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/octopyid/rune/main/install.sh | sh
+```
+
+### Homebrew (macOS / Linux)
 
 ```bash
 brew install octopyid/tap/rune
 ```
 
-**Go**
+### Pre-compiled Binaries
+
+Download standalone binaries for Linux and macOS (`amd64`, `arm64`) directly from [GitHub Releases](https://github.com/octopyid/rune/releases/latest).
+
+### Go Install
 
 ```bash
 go install github.com/octopyid/rune/cmd/rune@latest
 ```
 
-<details>
-<summary>Build from source</summary>
-<br>
+### Build from Source
 
 ```bash
 git clone https://github.com/octopyid/rune.git
 cd rune
-go build -o /usr/local/bin/rune ./cmd/rune
+go build -o ./bin/rune ./cmd/rune
 ```
-
-</details>
 
 ---
 
@@ -92,7 +90,7 @@ go build -o /usr/local/bin/rune ./cmd/rune
 
 ### Prerequisites
 
-- Go **1.26** or newer
+- Go **1.22** or newer (if building from source or installing via `go install`)
 
 ### Steps
 
@@ -110,7 +108,8 @@ test: build
 #[Reset the database schema]
 #[confirm: This will permanently delete all database data.]
 db:fresh:
-    dropdb --if-exists app_dev && createdb app_dev
+    dropdb --if-exists app_dev
+    createdb app_dev
 
 #[Forward arbitrary commands to Docker Compose]
 compose *args:
@@ -132,12 +131,26 @@ rune --dry-run release         # simulate without executing
 
 ---
 
-## Documentation
+## Syntax at a Glance
 
+```text
+task:                     # Run a simple command
+task arg:                 # Required positional argument
+task env="dev":           # Positional argument with default value
+task --race?:             # Optional boolean flag
+task *args:               # Forward arbitrary trailing arguments
+task: dep1 dep2           # Prerequisites executed before task
+#[Description]            # Task summary displayed in help menu
+#[confirm: Are you sure?] # Prompt user before executing task
+#[dir: path/to/dir]       # Execute task in specific working directory
+#[env: KEY=VAL; KEY2=V2]  # Task-scoped environment variables
+# arg: Description        # Document argument in help menu
+# --flag: Description     # Document flag in help menu
+```
 
-<details>
-<summary><b>Task Syntax</b> — Signatures, arguments, flags, and passthrough</summary>
-<br>
+---
+
+## Task Syntax
 
 A `Runefile` consists of metadata attributes, task signatures, and indented command bodies.
 
@@ -266,27 +279,67 @@ Options:
 
 > **Note**: Comments that do not match declared parameter names (such as developer notes `# NOTE: ...` or `# TODO: ...`), comments separated by blank lines, and comments inside the task body are completely ignored.
 
-### Interactive TTY & REPL
+### Working Directory (`#[dir]`)
 
-Rune attaches the child process directly to your terminal's `stdin`, `stdout`, and `stderr`:
+Set a task-specific working directory with `#[dir: <path>]`:
 
-- **Interactive Tools** — `bash`, `python`, `psql`, `ssh`, `vim`, `htop` run natively.
-- **Arrow Keys & Shortcuts** — Interactive navigation and control keys work out-of-the-box.
-- **Signal Forwarding** — `SIGINT` (`Ctrl+C`), `SIGTERM`, and `SIGHUP` are forwarded.
-- **Exit Code Preservation** — The exact exit code of the underlying command is propagated.
+```text
+#[dir: frontend]
+build:web:
+    npm run build
 
-Tasks also seamlessly participate in standard Unix pipes:
+#[dir: backend]
+build:api:
+    go build -o ../bin/api ./...
+```
+
+- Paths are relative to the directory containing the `Runefile` (or absolute if specified).
+- Rune configures the process working directory directly without injecting shell `cd` commands.
+- Rune validates that the directory exists before executing the task.
+- Dependencies retain their own working directory configuration.
+
+### Environment Variables (`#[env]`)
+
+Declare task-scoped environment variables using `#[env: ...]`. Both single-line and semicolon-separated formats are supported, and multiple `#[env]` attributes accumulate:
+
+```text
+#[env: GOOS=linux]
+#[env: CGO_ENABLED=0]
+build:linux:
+    go build -o ./bin/app-linux ./...
+```
+
+Equivalently in a single attribute:
+
+```text
+#[env: CGO_ENABLED=0; GOOS=linux]
+build:linux:
+    go build -o ./bin/app-linux ./...
+```
+
+- Task-scoped variables override inherited process environment variables and `.env` values for that task.
+- Dependencies maintain their own isolated task environments.
+
+### Terminal I/O & Process Execution
+
+`rune` connects child processes directly to the terminal's standard streams (`stdin`, `stdout`, `stderr`):
+
+- **Interactive Commands** — Programs such as `python`, `psql`, `ssh`, and text editors receive interactive terminal input directly.
+- **Signal Forwarding** — Common POSIX signals (`SIGINT`, `SIGTERM`, `SIGHUP`) are forwarded to the running command process.
+- **Exit Code Preservation** — Propagates the exact exit code of the executed command.
+- **Unix Pipes** — Tasks can participate in standard Unix pipes from your shell:
 
 ```bash
 cat dump.sql | rune db:import
 rune compose ps | grep running
 ```
 
-</details>
+> [!NOTE]
+> `rune` executes each command directly via `os/exec` without an implicit shell. If you need shell features such as pipes (`|`) or logical operators (`&&`), run them through `sh -c "..."`.
 
-<details>
-<summary><b>Features</b> — Namespaces, dependencies, confirmation, dry run, env</summary>
-<br>
+---
+
+## Features
 
 ### Namespaces
 
@@ -300,7 +353,8 @@ db:seed:
     go run ./cmd/seed
 
 db:fresh:
-    dropdb --if-exists app_dev && createdb app_dev
+    dropdb --if-exists app_dev
+    createdb app_dev
 ```
 
 Namespaces act like command groups:
@@ -338,10 +392,10 @@ release: build test
     ./release.sh
 ```
 
-| Guarantee | Description |
+| Behavior | Description |
 | :--- | :--- |
 | **Deterministic Ordering** | Dependencies execute before their dependent task |
-| **Deduplication** | `build` runs only once even if multiple tasks depend on it |
+| **Deduplication** | A task runs once even if multiple tasks depend on it |
 | **Cycle Detection** | Circular dependencies are detected before any command runs |
 | **Fail-Fast** | Non-zero exit code halts execution immediately |
 
@@ -353,7 +407,8 @@ Protect dangerous actions with `#[confirm: message]`:
 #[Reset the database schema]
 #[confirm: This will permanently delete all database data.]
 db:fresh:
-    dropdb --if-exists app_dev && createdb app_dev
+    dropdb --if-exists app_dev
+    createdb app_dev
 ```
 
 ```text
@@ -407,11 +462,56 @@ rune --dry-run release
 
 Child processes also inherit the full system environment (`os.Environ()`).
 
-</details>
+### Verbose Output (`--verbose`)
 
-<details>
-<summary><b>Console UI Components</b> — Built-in <code>info</code>, <code>warn</code>, <code>done</code>, <code>fail</code>, <code>error</code></summary>
-<br>
+Display each command before executing it:
+
+```bash
+rune build --verbose
+```
+
+```text
+$ go build -o ./bin/app ./...
+```
+
+- Does not alter command arguments, environment, or execution flow.
+- Command arguments with spaces or quotes are cleanly escaped.
+
+### Execution Timing (`--time`)
+
+Display execution duration for tasks:
+
+```bash
+rune test --time
+```
+
+Output for tasks with dependencies:
+
+```text
+[1/3] test:unit        0.82s
+[2/3] test:feature     1.45s
+[3/3] test:e2e         3.21s
+
+✔ Total: 5.48s
+```
+
+Combine with `--verbose`:
+
+```bash
+rune build --verbose --time
+```
+
+```text
+$ go build -o ./bin/app ./...
+
+✔ build (0.82s)
+
+Total: 0.82s
+```
+
+---
+
+## Console UI Components
 
 Rune includes built-in console UI components for use directly from the shell or inside your `Runefile` task recipes.
 
@@ -437,8 +537,8 @@ deploy:
 
 #[Verify system dependencies]
 check:
-    test -f .env || (rune error "Missing .env configuration file!" && exit 1)
-    git diff --quiet || (rune fail "Working directory has unstaged changes!" && exit 1)
+    sh -c "test -f .env || (rune error 'Missing .env configuration file!' && exit 1)"
+    sh -c "git diff --quiet || (rune fail 'Working directory has unstaged changes!' && exit 1)"
     rune done "All checks passed."
 ```
 
@@ -452,11 +552,9 @@ Output:
 
 > **Task Precedence**: If your `Runefile` defines a custom task named `info`, `warn`, `error`, `fail`, or `done`, your custom task takes precedence over the built-in component.
 
-</details>
+---
 
-<details>
-<summary><b>Shell Completion</b> — Bash, Zsh, and Fish setup</summary>
-<br>
+## Shell Completion
 
 Rune provides tab completion for Bash, Zsh, and Fish.
 
@@ -494,23 +592,32 @@ rune completion fish | source
 | `rune in<TAB>` | `info`, `warn`, `done`, `error`, `help`, `list` |
 | `rune --<TAB>` | `--dry-run`, `--help`, `--yes`, etc. |
 
-</details>
+---
+
+## Editor Setup
+
+### Visual Studio Code
+
+To enable syntax highlighting for `Runefile` in VS Code, add the file association to your `settings.json`:
+
+```json
+"files.associations": {
+    "Runefile": "makefile"
+}
+```
 
 ---
 
-## Boundaries
+## Scope & Philosophy
 
-Rune organizes and runs tasks. It does not try to manage your entire project lifecycle.
+`rune` is focused on running project-specific tasks. It is deliberately minimal and does not attempt to be:
 
-Rune is **not**:
+- A build system or CI/CD engine
+- A process supervisor or daemon manager
+- A package manager or environment orchestrator
+- A full scripting language or workflow engine
 
-- A build system or CI/CD platform
-- A deployment tool or process supervisor
-- A package or environment manager
-- A scheduler or remote execution system
-- A scripting language or workflow engine
-
-If a feature doesn't directly improve how tasks are **defined, discovered, invoked, or protected** — it doesn't belong in Rune.
+Its goal is simply to make defining, finding, and running tasks straightforward and dependable.
 
 ---
 

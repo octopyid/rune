@@ -29,17 +29,19 @@ type Passthrough struct {
 
 // Task represents a single task definition.
 type Task struct {
-	Name         string       // e.g. "db:fresh" or "build"
-	Namespace    string       // e.g. "db" or ""
-	ShortName    string       // e.g. "fresh" or "build"
-	Description  string       // e.g. "Reset the database"
-	Confirmation string       // confirmation message, or empty if none
-	Parameters   []Parameter  // positional arguments (required and default)
-	Flags        []Flag       // optional boolean flags
-	Passthrough  *Passthrough // optional passthrough (*args)
-	Dependencies []string     // task dependency names
-	Commands     []string     // command lines to execute
-	Line         int          // source line number
+	Name         string            // e.g. "db:fresh" or "build"
+	Namespace    string            // e.g. "db" or ""
+	ShortName    string            // e.g. "fresh" or "build"
+	Description  string            // e.g. "Reset the database"
+	Confirmation string            // confirmation message, or empty if none
+	Dir          string            // working directory relative to Runefile dir, or empty
+	Env          map[string]string // task-scoped environment variables
+	Parameters   []Parameter       // positional arguments (required and default)
+	Flags        []Flag            // optional boolean flags
+	Passthrough  *Passthrough      // optional passthrough (*args)
+	Dependencies []string          // task dependency names
+	Commands     []string          // command lines to execute
+	Line         int               // source line number
 }
 
 // HasFlag checks whether a flag with the given name exists in this task.

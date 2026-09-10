@@ -294,3 +294,74 @@ func TestFormatTaskHelpWithDocComments(t *testing.T) {
 		t.Errorf("expected passthrough description, got:\n%s", help)
 	}
 }
+
+func TestParseGlobalFlagsVerboseAndTime(t *testing.T) {
+	// 1. Default disabled
+	gf1, task1, args1, err := ParseGlobalFlags([]string{"build"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gf1.Verbose || gf1.Time {
+		t.Errorf("expected Verbose=false and Time=false by default, got verbose=%v, time=%v", gf1.Verbose, gf1.Time)
+	}
+	if task1 != "build" || len(args1) != 0 {
+		t.Errorf("mismatch task/args: task=%s, args=%v", task1, args1)
+	}
+
+	// 2. Global flags before task name
+	gf2, task2, _, err := ParseGlobalFlags([]string{"--verbose", "--time", "test"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !gf2.Verbose || !gf2.Time {
+		t.Errorf("expected Verbose=true and Time=true, got verbose=%v, time=%v", gf2.Verbose, gf2.Time)
+	}
+	if task2 != "test" {
+		t.Errorf("expected task 'test', got %q", task2)
+	}
+
+	// 3. Global flags after task name
+	gf3, task3, args3, err := ParseGlobalFlags([]string{"build", "--verbose", "--time", "dev"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !gf3.Verbose || !gf3.Time {
+		t.Errorf("expected Verbose=true and Time=true, got verbose=%v, time=%v", gf3.Verbose, gf3.Time)
+	}
+	if task3 != "build" {
+		t.Errorf("expected task 'build', got %q", task3)
+	}
+	if len(args3) != 1 || args3[0] != "dev" {
+		t.Errorf("expected task args ['dev'], got %v", args3)
+	}
+}
+
+func TestHelpIncludesVerboseAndTime(t *testing.T) {
+	help := FormatRootHelp(nil)
+	if !strings.Contains(help, "--verbose") {
+		t.Errorf("expected root help to describe --verbose, got:\n%s", help)
+	}
+	if !strings.Contains(help, "--time") {
+		t.Errorf("expected root help to describe --time, got:\n%s", help)
+	}
+}
+
+func TestCompletionIncludesVerboseAndTime(t *testing.T) {
+	suggestions := Complete(nil, []string{"--"})
+	hasVerbose := false
+	hasTime := false
+	for _, s := range suggestions {
+		if s == "--verbose" {
+			hasVerbose = true
+		}
+		if s == "--time" {
+			hasTime = true
+		}
+	}
+	if !hasVerbose {
+		t.Errorf("expected suggestions to include --verbose, got %v", suggestions)
+	}
+	if !hasTime {
+		t.Errorf("expected suggestions to include --time, got %v", suggestions)
+	}
+}

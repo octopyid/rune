@@ -21,7 +21,7 @@ If a proposed feature does not directly improve task definition, discovery, invo
 
 ### Prerequisites
 
-- **Go**: 1.26 or higher
+- **Go**: 1.22 or higher
 - **golangci-lint**: 2.13.2 or higher
 - **Git**
 

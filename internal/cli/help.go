@@ -33,6 +33,8 @@ var globalOptions = []optionItem{
 	{short: "-f", long: "--file[=FILE]", desc: "Path to task file (default: Runefile)"},
 	{short: "", long: "--dry-run", desc: "Simulate execution without running commands"},
 	{short: "-y", long: "--yes", desc: "Do not ask any interactive question (bypass confirmation)"},
+	{short: "", long: "--verbose", desc: "Display commands before executing them"},
+	{short: "", long: "--time", desc: "Display task execution duration"},
 }
 
 type commandEntry struct {

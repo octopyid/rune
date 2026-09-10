@@ -88,6 +88,8 @@ func run(args []string) int {
 			BoundArgs:  action.BoundArgs,
 			WorkingDir: taskFileDir,
 			DotEnv:     dotEnv,
+			Verbose:    action.GlobalFlags.Verbose,
+			Time:       action.GlobalFlags.Time,
 			Stdin:      ctx.Stdin,
 			Stdout:     ctx.Stdout,
 			Stderr:     ctx.Stderr,

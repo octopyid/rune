@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-11
+
+### Added
+
+- **Task Working Directory (`#[dir: <path>]`)**:
+  - Support task-scoped working directory via `#[dir: <path>]`, resolving paths relative to `Runefile` location (or absolute paths).
+  - Validates directory existence prior to task execution with fail-fast error reporting.
+  - Maintains isolated working directories across dependency execution.
+- **Task Environment Variables (`#[env: ...]`)**:
+  - Support declaring task-scoped environment variables with single, multiple, or semicolon-separated (`KEY=VAL; KEY2=V2`) assignments.
+  - Variables override `.env` and system environment values during task execution without leaking across tasks or to the parent shell.
+  - Multiple `#[env]` attributes on a task accumulate predictably.
+- **Verbose Command Echo (`--verbose`)**:
+  - Global option (`--verbose`) displaying each command formatted as `$ <command>` prior to execution.
+  - Properly formats arguments with shell escaping when containing whitespace or quotes.
+- **Task Execution Timing (`--time`)**:
+  - Global option (`--time`) displaying elapsed runtime for tasks.
+  - Formats single task elapsed duration (`✔ build (0.11s)`) and multi-task dependency breakdowns (`[1/3] ... [2/3] ... ✔ Total: 5.48s`).
+  - Correctly tracks and reports duration even when a task fails.
+- **Standalone Shell Installer (`install.sh`)**:
+  - POSIX-compliant one-line installer supporting automatic OS (`darwin`/`linux`) and architecture (`amd64`/`arm64`) detection.
+
+### Changed
+
+- **Go Version Compatibility**:
+  - Lower minimum Go requirement to **Go 1.22+** in `go.mod`, `README.md`, and `CONTRIBUTING.md` by pinning compatible module dependencies (`golang.org/x/term`, `golang.org/x/sys`, `github.com/fatih/color`).
+- **Documentation Refinement**:
+  - Remove redundant manual Table of Contents in `README.md` in favor of native GitHub Markdown navigation.
+  - Fix command syntax examples in Runefile recipes to avoid invalid shell chaining assumptions.
+
 ## [1.3.2] - 2026-09-10
 
 ### Fixed
@@ -95,7 +125,8 @@ Initial release of Rune — a small, predictable, and opinionated task runner fo
   - Pull request template (`.github/PULL_REQUEST_TEMPLATE.md`).
   - GitHub Issue Forms (`.github/ISSUE_TEMPLATE/bug_report.yml`, `feature_request.yml`, `config.yml`).
 
-[Unreleased]: https://github.com/octopyid/rune/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/octopyid/rune/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/octopyid/rune/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/octopyid/rune/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/octopyid/rune/compare/v1.1.0...v1.3.1
 [1.1.0]: https://github.com/octopyid/rune/compare/v1.0.0...v1.1.0

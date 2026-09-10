@@ -46,6 +46,8 @@ func Parse(r io.Reader, filePath string) (*ast.File, error) {
 
 		pendingDesc        string
 		pendingConfirm     string
+		pendingDir         string
+		pendingEnv         map[string]string
 		pendingDocComments []string
 
 		taskLineMap = make(map[string]int)
@@ -91,6 +93,35 @@ func Parse(r io.Reader, filePath string) (*ast.File, error) {
 			} else if after, ok := strings.CutPrefix(content, "description:"); ok {
 				desc := strings.TrimSpace(after)
 				pendingDesc = desc
+			} else if after, ok := strings.CutPrefix(content, "dir:"); ok {
+				dir := strings.TrimSpace(after)
+				if dir == "" {
+					return nil, &ParseError{
+						File:    filePath,
+						Line:    lineNum,
+						Message: "empty directory path in #[dir] attribute",
+					}
+				}
+				pendingDir = dir
+			} else if after, ok := strings.CutPrefix(content, "env:"); ok {
+				envContent := strings.TrimSpace(after)
+				if envContent == "" {
+					return nil, &ParseError{
+						File:    filePath,
+						Line:    lineNum,
+						Message: "empty environment assignment in #[env] attribute",
+					}
+				}
+				if pendingEnv == nil {
+					pendingEnv = make(map[string]string)
+				}
+				if err := parseEnvAttribute(envContent, pendingEnv); err != nil {
+					return nil, &ParseError{
+						File:    filePath,
+						Line:    lineNum,
+						Message: err.Error(),
+					}
+				}
 			} else {
 				// Bare metadata #[Build the application] is treated as description
 				pendingDesc = content
@@ -123,10 +154,14 @@ func Parse(r io.Reader, filePath string) (*ast.File, error) {
 		// Attach accumulated metadata and doc-comments
 		task.Description = pendingDesc
 		task.Confirmation = pendingConfirm
+		task.Dir = pendingDir
+		task.Env = pendingEnv
 		applyDocComments(task, pendingDocComments)
 
 		pendingDesc = ""
 		pendingConfirm = ""
+		pendingDir = ""
+		pendingEnv = nil
 		pendingDocComments = nil
 
 		tasks = append(tasks, task)
@@ -475,4 +510,32 @@ func applyDocComments(task *ast.Task, comments []string) {
 			}
 		}
 	}
+}
+
+// parseEnvAttribute parses key=value environment variable assignments separated by semicolons.
+func parseEnvAttribute(content string, envMap map[string]string) error {
+	parts := strings.Split(content, ";")
+	validCount := 0
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		before, after, ok := strings.Cut(trimmed, "=")
+		if !ok {
+			return fmt.Errorf("invalid environment assignment '%s' (missing '=')", trimmed)
+		}
+		key := strings.TrimSpace(before)
+		if key == "" {
+			return fmt.Errorf("invalid environment assignment '%s' (missing variable name)", trimmed)
+		}
+		val := strings.TrimSpace(after)
+		val = unquote(val)
+		envMap[key] = val
+		validCount++
+	}
+	if validCount == 0 {
+		return fmt.Errorf("empty environment assignment in #[env] attribute")
+	}
+	return nil
 }

@@ -6,9 +6,11 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/octopyid/rune/internal/ast"
 	"github.com/octopyid/rune/internal/cli"
@@ -23,9 +25,17 @@ type ExecutionContext struct {
 	BoundArgs  *cli.BoundArgs
 	WorkingDir string
 	DotEnv     map[string]string
+	Verbose    bool
+	Time       bool
 	Stdin      io.Reader
 	Stdout     io.Writer
 	Stderr     io.Writer
+}
+
+type taskTiming struct {
+	name     string
+	duration time.Duration
+	failed   bool
 }
 
 // ExecutePlan runs each task in the plan sequentially.
@@ -45,8 +55,34 @@ func ExecutePlan(ctx ExecutionContext) int {
 		stderr = os.Stderr
 	}
 
+	var timings []taskTiming
+	planStart := time.Now()
+	totalPlan := len(ctx.Plan)
+	var planExitCode int
+
 	for _, task := range ctx.Plan {
-		// Determine bound args for this task
+		taskStart := time.Now()
+
+		// 1. Resolve and validate task-scoped working directory
+		taskDir := ctx.WorkingDir
+		if task.Dir != "" {
+			if filepath.IsAbs(task.Dir) {
+				taskDir = filepath.Clean(task.Dir)
+			} else {
+				taskDir = filepath.Join(ctx.WorkingDir, task.Dir)
+			}
+			stat, err := os.Stat(taskDir)
+			if err != nil || !stat.IsDir() {
+				ui.Fail(stderr, fmt.Sprintf("Directory '%s' does not exist for task '%s'", task.Dir, task.Name))
+				if ctx.Time {
+					timings = append(timings, taskTiming{name: task.Name, duration: time.Since(taskStart), failed: true})
+					printTiming(stdout, timings, totalPlan, time.Since(planStart), 1)
+				}
+				return 1
+			}
+		}
+
+		// 2. Determine bound args for this task
 		var taskBound *cli.BoundArgs
 		if task.Name == ctx.TargetTask.Name {
 			taskBound = ctx.BoundArgs
@@ -66,8 +102,13 @@ func ExecutePlan(ctx ExecutionContext) int {
 			}
 		}
 
-		// Build task environment variables
+		// 3. Build task environment variables
 		taskEnv := make(map[string]string)
+		// Apply task-scoped #[env] attributes first (they override OS and .env)
+		for k, v := range task.Env {
+			taskEnv[k] = v
+		}
+		// Apply internal task variables and arguments
 		taskEnv["RUNE_TASK"] = task.Name
 		for k, v := range taskBound.Arguments {
 			taskEnv[k] = v
@@ -82,26 +123,82 @@ func ExecutePlan(ctx ExecutionContext) int {
 
 		mergedEnv := env.BuildEnvironment(os.Environ(), ctx.DotEnv, taskEnv)
 
-		// Execute task commands sequentially
+		// 4. Execute task commands sequentially
+		taskFailed := false
 		for _, cmdLine := range task.Commands {
 			argv, err := ExpandCommand(cmdLine, taskBound)
 			if err != nil {
 				ui.Fail(stderr, fmt.Sprintf("Failed to expand command: %v", err))
-				return 1
+				taskFailed = true
+				planExitCode = 1
+				break
 			}
 
 			if len(argv) == 0 {
 				continue
 			}
 
-			exitCode := runCommand(argv, ctx.WorkingDir, mergedEnv, stdin, stdout, stderr)
-			if exitCode != 0 {
-				return exitCode
+			if ctx.Verbose {
+				fmt.Fprintf(stdout, "$ %s\n", formatArgv(argv))
 			}
+
+			exitCode := runCommand(argv, taskDir, mergedEnv, stdin, stdout, stderr)
+			if exitCode != 0 {
+				taskFailed = true
+				planExitCode = exitCode
+				break
+			}
+		}
+
+		taskElapsed := time.Since(taskStart)
+		if taskFailed {
+			if ctx.Time {
+				timings = append(timings, taskTiming{name: task.Name, duration: taskElapsed, failed: true})
+				printTiming(stdout, timings, totalPlan, time.Since(planStart), planExitCode)
+			}
+			return planExitCode
+		}
+
+		if ctx.Time {
+			timings = append(timings, taskTiming{name: task.Name, duration: taskElapsed, failed: false})
 		}
 	}
 
+	if ctx.Time {
+		printTiming(stdout, timings, totalPlan, time.Since(planStart), 0)
+	}
+
 	return 0
+}
+
+func printTiming(w io.Writer, timings []taskTiming, totalPlan int, totalDuration time.Duration, exitCode int) {
+	if len(timings) == 0 {
+		return
+	}
+	if totalPlan == 1 {
+		t := timings[0]
+		if exitCode != 0 {
+			fmt.Fprintf(w, "\n✖ %s (%.2fs)\n\nTotal: %.2fs\n", t.name, t.duration.Seconds(), totalDuration.Seconds())
+		} else {
+			fmt.Fprintf(w, "\n✔ %s (%.2fs)\n\nTotal: %.2fs\n", t.name, t.duration.Seconds(), totalDuration.Seconds())
+		}
+		return
+	}
+
+	fmt.Fprintln(w)
+	for i, t := range timings {
+		status := ""
+		if t.failed {
+			status = " (failed)"
+		}
+		fmt.Fprintf(w, "[%d/%d] %-16s %s%.2fs\n", i+1, totalPlan, t.name+status, "", t.duration.Seconds())
+	}
+	fmt.Fprintln(w)
+	if exitCode != 0 {
+		fmt.Fprintf(w, "✖ Total: %.2fs\n", totalDuration.Seconds())
+	} else {
+		fmt.Fprintf(w, "✔ Total: %.2fs\n", totalDuration.Seconds())
+	}
 }
 
 func runCommand(argv []string, dir string, env []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {

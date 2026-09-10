@@ -263,3 +263,138 @@ greet name:
 		t.Errorf("expected empty description for greet parameter, got %q", greet.Parameters[0].Description)
 	}
 }
+
+func TestParseDirAttribute(t *testing.T) {
+	// 1. Task without dir
+	input1 := `
+build:
+    go build ./...
+`
+	file1, err := Parse(strings.NewReader(input1), "Runefile")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	task1, _ := file1.GetTask("build")
+	if task1.Dir != "" {
+		t.Errorf("expected empty Dir for task without #[dir], got %q", task1.Dir)
+	}
+
+	// 2. Relative and absolute dir
+	input2 := `
+#[dir: frontend]
+build:web:
+    npm run build
+
+#[dir: /tmp/custom]
+build:custom:
+    echo custom
+`
+	file2, err := Parse(strings.NewReader(input2), "Runefile")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	taskWeb, _ := file2.GetTask("build:web")
+	if taskWeb.Dir != "frontend" {
+		t.Errorf("expected Dir 'frontend', got %q", taskWeb.Dir)
+	}
+	taskCustom, _ := file2.GetTask("build:custom")
+	if taskCustom.Dir != "/tmp/custom" {
+		t.Errorf("expected Dir '/tmp/custom', got %q", taskCustom.Dir)
+	}
+
+	// 3. Empty dir should produce ParseError
+	input3 := `
+#[dir: ]
+build:
+    go build ./...
+`
+	_, err = Parse(strings.NewReader(input3), "Runefile")
+	if err == nil {
+		t.Fatal("expected error for empty #[dir] attribute, got nil")
+	}
+	if !strings.Contains(err.Error(), "empty directory path") {
+		t.Errorf("expected 'empty directory path' error, got %v", err)
+	}
+}
+
+func TestParseEnvAttribute(t *testing.T) {
+	// 1. Single #[env]
+	input1 := `
+#[env: GOOS=linux]
+build:
+    go build ./...
+`
+	file1, err := Parse(strings.NewReader(input1), "Runefile")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	task1, _ := file1.GetTask("build")
+	if len(task1.Env) != 1 || task1.Env["GOOS"] != "linux" {
+		t.Errorf("expected GOOS=linux, got %+v", task1.Env)
+	}
+
+	// 2. Multiple #[env] attributes accumulating, mixed with semicolon syntax, whitespace, and quoted values
+	input2 := `
+#[env: GOOS=linux]
+#[env: CGO_ENABLED=0; GOARCH=amd64]
+#[env: URL="https://example.com?a=1&b=2"; DEBUG='true'; ]
+build:mixed:
+    go build ./...
+`
+	file2, err := Parse(strings.NewReader(input2), "Runefile")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	task2, _ := file2.GetTask("build:mixed")
+	if task2.Env["GOOS"] != "linux" {
+		t.Errorf("expected GOOS=linux, got %q", task2.Env["GOOS"])
+	}
+	if task2.Env["CGO_ENABLED"] != "0" {
+		t.Errorf("expected CGO_ENABLED=0, got %q", task2.Env["CGO_ENABLED"])
+	}
+	if task2.Env["GOARCH"] != "amd64" {
+		t.Errorf("expected GOARCH=amd64, got %q", task2.Env["GOARCH"])
+	}
+	if task2.Env["URL"] != "https://example.com?a=1&b=2" {
+		t.Errorf("expected URL='https://example.com?a=1&b=2', got %q", task2.Env["URL"])
+	}
+	if task2.Env["DEBUG"] != "true" {
+		t.Errorf("expected DEBUG=true, got %q", task2.Env["DEBUG"])
+	}
+
+	// 3. Values containing '=' (e.g. KEY=foo=bar)
+	input3 := `
+#[env: KEY=foo=bar=baz]
+test:
+    echo $KEY
+`
+	file3, err := Parse(strings.NewReader(input3), "Runefile")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	task3, _ := file3.GetTask("test")
+	if task3.Env["KEY"] != "foo=bar=baz" {
+		t.Errorf("expected 'foo=bar=baz', got %q", task3.Env["KEY"])
+	}
+
+	// 4. Invalid assignments
+	invalidCases := []struct {
+		input  string
+		errSub string
+	}{
+		{"#[env: ]\ntask:\n    echo 1\n", "empty environment assignment"},
+		{"#[env: ; ; ]\ntask:\n    echo 1\n", "empty environment assignment"},
+		{"#[env: FOO]\ntask:\n    echo 1\n", "missing '='"},
+		{"#[env: =bar]\ntask:\n    echo 1\n", "missing variable name"},
+	}
+	for _, tc := range invalidCases {
+		_, err := Parse(strings.NewReader(tc.input), "Runefile")
+		if err == nil {
+			t.Errorf("expected error containing %q for input %q, got nil", tc.errSub, tc.input)
+			continue
+		}
+		if !strings.Contains(err.Error(), tc.errSub) {
+			t.Errorf("expected error containing %q, got %v", tc.errSub, err)
+		}
+	}
+}

@@ -437,3 +437,56 @@ func TestE2ESignalExitCode(t *testing.T) {
 		t.Errorf("expected exit code 130 for SIGINT, got %d", code)
 	}
 }
+
+func TestE2EDirEnvVerboseTime(t *testing.T) {
+	tmpDir := t.TempDir()
+	frontDir := filepath.Join(tmpDir, "front")
+	backDir := filepath.Join(tmpDir, "back")
+	if err := os.MkdirAll(frontDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(backDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	runefile := `
+#[dir: front]
+#[env: APP=frontend]
+front:
+    sh -c "echo FRONT: PWD=$PWD APP=$APP"
+
+#[dir: back]
+#[env: APP=backend; CGO_ENABLED=0]
+back: front
+    sh -c "echo BACK: PWD=$PWD APP=$APP CGO=$CGO_ENABLED"
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "Runefile"), []byte(runefile), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := runRune(tmpDir, "", "back", "--verbose", "--time")
+	if code != 0 {
+		t.Fatalf("expected code 0, got %d. stderr: %s", code, stderr)
+	}
+
+	// 1. Verify verbose echoed commands
+	if !strings.Contains(stdout, "$ sh -c") {
+		t.Errorf("expected verbose mode to echo command, got:\n%s", stdout)
+	}
+
+	// 2. Verify task-scoped dir and env execution
+	realFront, _ := filepath.EvalSymlinks(frontDir)
+	realBack, _ := filepath.EvalSymlinks(backDir)
+
+	if !strings.Contains(stdout, fmt.Sprintf("FRONT: PWD=%s APP=frontend", realFront)) {
+		t.Errorf("expected front task output with realFront and APP=frontend, got:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, fmt.Sprintf("BACK: PWD=%s APP=backend CGO=0", realBack)) {
+		t.Errorf("expected back task output with realBack, APP=backend, CGO=0, got:\n%s", stdout)
+	}
+
+	// 3. Verify task execution timing
+	if !strings.Contains(stdout, "[1/2] front") || !strings.Contains(stdout, "[2/2] back") || !strings.Contains(stdout, "✔ Total:") {
+		t.Errorf("expected timing output for both tasks and total, got:\n%s", stdout)
+	}
+}

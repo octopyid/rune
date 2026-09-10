@@ -14,6 +14,8 @@ type GlobalFlags struct {
 	File    string
 	DryRun  bool
 	Yes     bool
+	Verbose bool
+	Time    bool
 }
 
 // BoundArgs contains the resolved arguments and options for a task invocation.
@@ -70,6 +72,16 @@ func ParseGlobalFlags(args []string) (GlobalFlags, string, []string, error) {
 			i++
 			continue
 		}
+		if arg == "--verbose" {
+			gf.Verbose = true
+			i++
+			continue
+		}
+		if arg == "--time" {
+			gf.Time = true
+			i++
+			continue
+		}
 
 		// First non-flag argument is the task name (or namespace)
 		if taskName == "" && !strings.HasPrefix(arg, "-") {
@@ -86,6 +98,8 @@ func ParseGlobalFlags(args []string) (GlobalFlags, string, []string, error) {
 				"--file", "-f",
 				"--dry-run",
 				"--yes", "-y",
+				"--verbose",
+				"--time",
 			}
 			sugg := Suggest(arg, globalCandidates)
 			if sugg != "" {

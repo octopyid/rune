@@ -9,7 +9,7 @@ import (
 
 // Complete generates completion suggestions given the current command-line words.
 func Complete(file *ast.File, words []string) []string {
-	globalFlags := []string{"--help", "-h", "--version", "-v", "--file", "-f", "--dry-run", "--yes", "-y"}
+	globalFlags := []string{"--help", "-h", "--version", "-v", "--file", "-f", "--dry-run", "--yes", "-y", "--verbose", "--time"}
 
 	// If no task file found, offer global flags
 	if file == nil {
