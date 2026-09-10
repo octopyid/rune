@@ -468,4 +468,3 @@ func TestTreeGlobalFlagAndRouting(t *testing.T) {
 		t.Errorf("expected suggestions to include --tree, got %v", suggestions)
 	}
 }
-
