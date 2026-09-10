@@ -3,17 +3,20 @@
 </p>
 
 <p align="center">
+  <a href="https://go.dev">
+    <img src="https://img.shields.io/badge/Go-1.22%2B-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go Version" />
+  </a>
   <a href="https://github.com/octopyid/rune/releases">
-    <img src="https://img.shields.io/github/v/release/octopyid/rune?style=for-the-badge&logo=github&label=Release&color=6e56cf" alt="Release" />
+    <img src="https://img.shields.io/github/v/release/octopyid/rune?style=for-the-badge&logo=github&label=Release" alt="Release" />
+  </a>
+  <a href="https://github.com/octopyid/rune/releases">
+    <img src="https://img.shields.io/github/downloads/octopyid/rune/total?style=for-the-badge&logo=github&label=Downloads&color=F28D1A" alt="Downloads" />
   </a>
   <a href="https://github.com/octopyid/rune/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/octopyid/rune/ci.yml?style=for-the-badge&logo=github&label=CI" alt="CI" />
+    <img src="https://img.shields.io/github/actions/workflow/status/octopyid/rune/ci.yml?style=for-the-badge&logo=githubactions&logoColor=white&label=CI" alt="CI Status" />
   </a>
   <a href="https://github.com/octopyid/rune/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge&color=3d9970" alt="License" />
-  </a>
-  <a href="https://go.dev">
-    <img src="https://img.shields.io/badge/Go-1.22%2B-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go" />
+    <img src="https://img.shields.io/badge/License-MIT-94a3b8?style=for-the-badge" alt="License" />
   </a>
 </p>
 
