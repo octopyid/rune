@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-11
+
+### Fixed
+
+- **Zsh Shell Completion Execution**:
+  - Fix `can only be called from completion function` error when sourcing completion scripts directly (e.g. `source <(rune completion zsh)`) or reloading Oh My Zsh (`omz reload`).
+  - Guard immediate execution of `_rune "$@"` with `[ "$funcstack[1]" = "_rune" ]` so the completion function is only evaluated during completion calls, not during shell initialization.
+  - Automatically register completion via `compdef _rune rune` when the script is sourced into an active shell.
+
 ## [1.4.0] - 2026-09-11
 
 ### Added
@@ -125,7 +134,8 @@ Initial release of Rune — a small, predictable, and opinionated task runner fo
   - Pull request template (`.github/PULL_REQUEST_TEMPLATE.md`).
   - GitHub Issue Forms (`.github/ISSUE_TEMPLATE/bug_report.yml`, `feature_request.yml`, `config.yml`).
 
-[Unreleased]: https://github.com/octopyid/rune/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/octopyid/rune/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/octopyid/rune/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/octopyid/rune/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/octopyid/rune/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/octopyid/rune/compare/v1.1.0...v1.3.1

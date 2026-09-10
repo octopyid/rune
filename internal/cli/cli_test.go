@@ -200,6 +200,14 @@ func TestCompletion(t *testing.T) {
 			t.Errorf("failed generating completion for %s: %v", sh, err)
 		}
 	}
+
+	zshScript, _ := GenerateCompletion("zsh")
+	if !strings.Contains(zshScript, "compdef _rune rune") {
+		t.Errorf("expected zsh script to register completion with compdef")
+	}
+	if !strings.Contains(zshScript, `if [ "$funcstack[1]" = "_rune" ]; then`) {
+		t.Errorf("expected zsh script to guard execution with funcstack check")
+	}
 }
 
 func TestJoinLines(t *testing.T) {

@@ -85,6 +85,7 @@ complete -F _rune_completions rune
 // ZshCompletionScript generates zsh completion code.
 func ZshCompletionScript() string {
 	return `#compdef rune
+compdef _rune rune 2>/dev/null || true
 
 _rune() {
     local -a suggestions
@@ -92,7 +93,9 @@ _rune() {
     _describe 'commands' suggestions
 }
 
-_rune "$@"
+if [ "$funcstack[1]" = "_rune" ]; then
+    _rune "$@"
+fi
 `
 }
 
