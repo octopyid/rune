@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strings"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/octopyid/rune/internal/ast"
@@ -113,12 +114,11 @@ func runCommand(argv []string, dir string, env []string, stdin io.Reader, stdout
 
 	setProcessGroup(cmd)
 
-	sigChan := make(chan os.Signal, 1)
+	var interrupted atomic.Bool
+	var sigCount atomic.Int32
+	sigChan := make(chan os.Signal, 2)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
-	defer func() {
-		signal.Stop(sigChan)
-		close(sigChan)
-	}()
+	defer signal.Stop(sigChan)
 
 	if err := cmd.Start(); err != nil {
 		ui.Fail(stderr, fmt.Sprintf("Command failed to start '%s': %v", argv[0], err))
@@ -128,8 +128,15 @@ func runCommand(argv []string, dir string, env []string, stdin io.Reader, stdout
 	// Forward signals to child process
 	go func() {
 		for sig := range sigChan {
+			interrupted.Store(true)
+			count := sigCount.Add(1)
 			if cmd.Process != nil {
-				forwardSignal(cmd, sig)
+				if count > 1 && (sig == syscall.SIGINT || sig == syscall.SIGTERM) {
+					// Force kill child process on repeated interrupt signal
+					_ = cmd.Process.Kill()
+				} else {
+					forwardSignal(cmd, sig)
+				}
 			}
 		}
 	}()
@@ -137,9 +144,13 @@ func runCommand(argv []string, dir string, env []string, stdin io.Reader, stdout
 	err := cmd.Wait()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return exitErr.ExitCode()
+			return exitStatus(exitErr)
 		}
 		return 1
+	}
+
+	if interrupted.Load() {
+		return 130
 	}
 
 	return 0

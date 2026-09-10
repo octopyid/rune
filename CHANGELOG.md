@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-09-10
+
+### Fixed
+
+- **Interactive TTY Input & Signal Handling**:
+  - Fix interactive child process terminal access by ensuring child processes share the foreground process group with Rune instead of detaching via `Setpgid`.
+  - Fix single-key keyboard shortcuts (e.g. Flutter `s` for screenshot, `r` for hot reload, `h` for help, `q` for quit) previously blocked because background processes were suspended by `SIGTTIN`.
+  - Fix `Ctrl+C` (`SIGINT`) handling during child process execution, adding force-kill on repeated interrupt signals.
+  - Fix signal exit code propagation to return POSIX-standard `128 + signal` (e.g. 130 for `SIGINT`) and abort remaining tasks in the plan on interruption.
+
 ## [1.3.1] - 2026-09-10
 
 ### Fixed
@@ -85,7 +95,8 @@ Initial release of Rune — a small, predictable, and opinionated task runner fo
   - Pull request template (`.github/PULL_REQUEST_TEMPLATE.md`).
   - GitHub Issue Forms (`.github/ISSUE_TEMPLATE/bug_report.yml`, `feature_request.yml`, `config.yml`).
 
-[Unreleased]: https://github.com/octopyid/rune/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/octopyid/rune/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/octopyid/rune/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/octopyid/rune/compare/v1.1.0...v1.3.1
 [1.1.0]: https://github.com/octopyid/rune/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/octopyid/rune/releases/tag/v1.0.0

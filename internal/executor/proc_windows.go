@@ -16,3 +16,7 @@ func forwardSignal(cmd *exec.Cmd, sig os.Signal) {
 		_ = cmd.Process.Signal(sig)
 	}
 }
+
+func exitStatus(exitErr *exec.ExitError) int {
+	return exitErr.ExitCode()
+}

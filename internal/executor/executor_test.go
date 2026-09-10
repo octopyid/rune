@@ -196,3 +196,51 @@ func TestExecutePlanSuccessAndFailFast(t *testing.T) {
 		t.Errorf("main task should not have run after dependency failure! stdout: %s", stdout.String())
 	}
 }
+
+func TestExecutePlanStdin(t *testing.T) {
+	taskStdin := &ast.Task{
+		Name:     "read_input",
+		Commands: []string{"sh -c 'read line; echo \"RECEIVED: $line\"'"},
+	}
+	bound := &cli.BoundArgs{Task: taskStdin}
+
+	var stdout, stderr bytes.Buffer
+	ctx := ExecutionContext{
+		Plan:       []*ast.Task{taskStdin},
+		TargetTask: taskStdin,
+		BoundArgs:  bound,
+		Stdin:      strings.NewReader("flutter_screenshot_s\n"),
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+	}
+
+	code := ExecutePlan(ctx)
+	if code != 0 {
+		t.Errorf("expected exit code 0, got %d. stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "RECEIVED: flutter_screenshot_s") {
+		t.Errorf("expected stdin to be received by child, got: %s", stdout.String())
+	}
+}
+
+func TestExitStatusSignal(t *testing.T) {
+	taskSignal := &ast.Task{
+		Name:     "sig",
+		Commands: []string{"sh -c 'kill -INT $$'"},
+	}
+	bound := &cli.BoundArgs{Task: taskSignal}
+
+	var stdout, stderr bytes.Buffer
+	ctx := ExecutionContext{
+		Plan:       []*ast.Task{taskSignal},
+		TargetTask: taskSignal,
+		BoundArgs:  bound,
+		Stdout:     &stdout,
+		Stderr:     &stderr,
+	}
+
+	code := ExecutePlan(ctx)
+	if code != 130 {
+		t.Errorf("expected exit code 130 for SIGINT, got %d", code)
+	}
+}

@@ -400,3 +400,40 @@ func TestE2EDotEnv(t *testing.T) {
 		t.Errorf("expected RUNE_TASK=env_check, got %q", stdout)
 	}
 }
+
+func TestE2EStdinForwarding(t *testing.T) {
+	dir := setupFixture(t)
+	rfPath := filepath.Join(dir, "Runefile")
+	extraTask := "\nread_task:\n    sh -c \"read line; echo GOT: $line\"\n"
+	f, err := os.OpenFile(rfPath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(extraTask)
+	_ = f.Close()
+
+	stdout, _, code := runRune(dir, "flutter_screenshot_s\n", "read_task")
+	if code != 0 {
+		t.Fatalf("expected code 0, got %d", code)
+	}
+	if !strings.Contains(stdout, "GOT: flutter_screenshot_s") {
+		t.Errorf("expected child process to receive stdin, got: %s", stdout)
+	}
+}
+
+func TestE2ESignalExitCode(t *testing.T) {
+	dir := setupFixture(t)
+	rfPath := filepath.Join(dir, "Runefile")
+	extraTask := "\nsig_task:\n    sh -c \"kill -INT $$\"\n"
+	f, err := os.OpenFile(rfPath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(extraTask)
+	_ = f.Close()
+
+	_, _, code := runRune(dir, "", "sig_task")
+	if code != 130 {
+		t.Errorf("expected exit code 130 for SIGINT, got %d", code)
+	}
+}
