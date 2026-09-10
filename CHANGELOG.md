@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-10
+
+### Fixed
+
+- **Module Entrypoint & Distribution**:
+  - Restructure entrypoint to `cmd/rune` for standard Go CLI installations.
+  - Fix Go module proxy compatibility: supersedes earlier unversioned proxy cache anomalies (`v1.2.0` and `v1.3.0` skipped) to restore seamless `go install github.com/octopyid/rune/cmd/rune@latest`.
+
 ## [1.1.0] - 2026-09-10
 
 ### Added
@@ -77,6 +85,7 @@ Initial release of Rune — a small, predictable, and opinionated task runner fo
   - Pull request template (`.github/PULL_REQUEST_TEMPLATE.md`).
   - GitHub Issue Forms (`.github/ISSUE_TEMPLATE/bug_report.yml`, `feature_request.yml`, `config.yml`).
 
-[Unreleased]: https://github.com/octopyid/rune/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/octopyid/rune/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/octopyid/rune/compare/v1.1.0...v1.3.1
 [1.1.0]: https://github.com/octopyid/rune/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/octopyid/rune/releases/tag/v1.0.0
