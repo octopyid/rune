@@ -26,7 +26,8 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: 'stable'
+          check-latest: true
 
       - name: Check formatting
         run: test -z "$(gofmt -l .)"
