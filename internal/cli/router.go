@@ -15,7 +15,7 @@ import (
 )
 
 // Version is the current Rune CLI release version.
-var Version = "1.5.0"
+var Version = "1.6.0"
 
 // RunContext encapsulates execution context for the CLI.
 type RunContext struct {

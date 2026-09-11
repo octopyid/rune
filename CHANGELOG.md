@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-11
+
 ### Added
 
 - **CLI Task Options & Enum Choices**:
@@ -163,7 +165,8 @@ Initial release of Rune — a small, predictable, and opinionated task runner fo
   - Pull request template (`.github/PULL_REQUEST_TEMPLATE.md`).
   - GitHub Issue Forms (`.github/ISSUE_TEMPLATE/bug_report.yml`, `feature_request.yml`, `config.yml`).
 
-[Unreleased]: https://github.com/octopyid/rune/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/octopyid/rune/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/octopyid/rune/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/octopyid/rune/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/octopyid/rune/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/octopyid/rune/compare/v1.3.2...v1.4.0
