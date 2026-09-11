@@ -453,3 +453,153 @@ deploy: setup:certs
 		t.Errorf("expected 0 public namespaces (setup only had private tasks), got %v", publicNs)
 	}
 }
+
+func TestParseOptionsAndEnums(t *testing.T) {
+	input := `
+# -w|--watch: Watch files
+# -o|--output: Destination folder
+# target: Entrypoint
+build -w|--watch? -o|--output="dist" target="./cmd/app":
+    go build {{watch}} -o {{output}} {{target}}
+
+# -e|--env: Cloud env
+# -m|--mode: Deploy mode
+# -v|--verbose: Verbose output
+deploy -e|--env=[staging,production] -m|--mode=[rolling,canary]="rolling" -v|--verbose?:
+    ./deploy.sh
+
+# action: Migration direction
+db:migrate action=[up,down,status]="up" *args:
+    migrate {{action}} {{args}}
+
+# -t|--token: Secret auth token
+# -t2|--tag: Tag version
+release -t|--token= --empty=? req_action=[start,stop]:
+    ./release.sh
+`
+	file, err := Parse(strings.NewReader(input), "Runefile")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	// 1. Check build task
+	build, ok := file.GetTask("build")
+	if !ok {
+		t.Fatal("task 'build' not found")
+	}
+	if len(build.Flags) != 2 {
+		t.Fatalf("expected 2 flags on build, got %d", len(build.Flags))
+	}
+	// -w|--watch?
+	wFlag := build.Flags[0]
+	if wFlag.Short != "w" || wFlag.Name != "watch" || wFlag.IsValued || wFlag.Description != "Watch files" {
+		t.Errorf("watch flag mismatch: %+v", wFlag)
+	}
+	// -o|--output="dist"
+	oFlag := build.Flags[1]
+	if oFlag.Short != "o" || oFlag.Name != "output" || !oFlag.IsValued || !oFlag.HasDefault || oFlag.DefaultValue != "dist" || oFlag.Description != "Destination folder" {
+		t.Errorf("output flag mismatch: %+v", oFlag)
+	}
+	// target="./cmd/app"
+	if len(build.Parameters) != 1 || build.Parameters[0].Name != "target" || build.Parameters[0].DefaultValue != "./cmd/app" {
+		t.Errorf("target param mismatch: %+v", build.Parameters)
+	}
+
+	// 2. Check deploy task
+	deploy, ok := file.GetTask("deploy")
+	if !ok {
+		t.Fatal("task 'deploy' not found")
+	}
+	if len(deploy.Flags) != 3 {
+		t.Fatalf("expected 3 flags on deploy, got %d", len(deploy.Flags))
+	}
+	// -e|--env=[staging,production]
+	eFlag := deploy.Flags[0]
+	if eFlag.Short != "e" || eFlag.Name != "env" || !eFlag.IsValued || !eFlag.Required || len(eFlag.Choices) != 2 {
+		t.Errorf("env flag mismatch: %+v", eFlag)
+	}
+	if eFlag.Choices[0] != "staging" || eFlag.Choices[1] != "production" {
+		t.Errorf("expected [staging, production], got %v", eFlag.Choices)
+	}
+	// -m|--mode=[rolling,canary]="rolling"
+	mFlag := deploy.Flags[1]
+	if mFlag.Short != "m" || mFlag.Name != "mode" || !mFlag.IsValued || mFlag.Required || !mFlag.HasDefault || mFlag.DefaultValue != "rolling" {
+		t.Errorf("mode flag mismatch: %+v", mFlag)
+	}
+	// -v|--verbose?
+	vFlag := deploy.Flags[2]
+	if vFlag.Short != "v" || vFlag.Name != "verbose" || vFlag.IsValued {
+		t.Errorf("verbose flag mismatch: %+v", vFlag)
+	}
+
+	// 3. Check db:migrate
+	migrate, ok := file.GetTask("db:migrate")
+	if !ok {
+		t.Fatal("task 'db:migrate' not found")
+	}
+	if len(migrate.Parameters) != 1 {
+		t.Fatalf("expected 1 param on db:migrate, got %d", len(migrate.Parameters))
+	}
+	actionParam := migrate.Parameters[0]
+	if actionParam.Name != "action" || !actionParam.HasDefault || actionParam.DefaultValue != "up" || len(actionParam.Choices) != 3 {
+		t.Errorf("action param mismatch: %+v", actionParam)
+	}
+
+	// 4. Check release task
+	release, ok := file.GetTask("release")
+	if !ok {
+		t.Fatal("task 'release' not found")
+	}
+	tFlag := release.Flags[0]
+	if tFlag.Short != "t" || tFlag.Name != "token" || !tFlag.IsValued || !tFlag.Required {
+		t.Errorf("token flag mismatch: %+v", tFlag)
+	}
+	emptyFlag := release.Flags[1]
+	if emptyFlag.Name != "empty" || !emptyFlag.IsValued || emptyFlag.Required || !emptyFlag.HasDefault || emptyFlag.DefaultValue != "" {
+		t.Errorf("empty flag mismatch: %+v", emptyFlag)
+	}
+	reqAction := release.Parameters[0]
+	if reqAction.Name != "req_action" || reqAction.HasDefault || len(reqAction.Choices) != 2 {
+		t.Errorf("req_action param mismatch: %+v", reqAction)
+	}
+
+	// 5. Test errors
+	errorInputs := []struct {
+		name string
+		rf   string
+		err  string
+	}{
+		{
+			name: "multi-char short alias",
+			rf:   "build -wh|--watch:\n    echo 1\n",
+			err:  "must be exactly one character",
+		},
+		{
+			name: "duplicate option",
+			rf:   "build --watch --watch:\n    echo 1\n",
+			err:  "duplicate option '--watch'",
+		},
+		{
+			name: "duplicate short alias",
+			rf:   "build -w|--watch -w|--worker:\n    echo 1\n",
+			err:  "duplicate short option alias '-w'",
+		},
+		{
+			name: "empty choices",
+			rf:   "build --env=[]:\n    echo 1\n",
+			err:  "choices cannot be empty",
+		},
+	}
+
+	for _, tt := range errorInputs {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse(strings.NewReader(tt.rf), "Runefile")
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tt.err)
+			}
+			if !strings.Contains(err.Error(), tt.err) {
+				t.Errorf("expected error %q, got %v", tt.err, err)
+			}
+		})
+	}
+}

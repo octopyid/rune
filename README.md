@@ -40,7 +40,7 @@ rune compose up --build  # forward passthrough arguments to underlying tools
 ## Key Features
 
 - **Namespaced Tasks** — Organize related tasks under namespaces (e.g. `rune db:migrate`, `rune db:seed`).
-- **Command-line Arguments & Flags** — Accept positional arguments, default values, and boolean flags (`--race?`).
+- **Command-line Arguments, Options & Enums** — Accept positional arguments, short/long flags (`-w|--watch?`), valued options (`--output="dist"`), and enum choices (`--env=[staging,production]`).
 - **Per-Task Help Menus** — Auto-generated `--help` for tasks and namespaces, with doc-comments for parameters.
 - **Dependency Execution** — Run prerequisite tasks with cycle detection and deduplication.
 - **Dependency Tree Inspection** — Inspect execution graphs in Unicode box-drawing format with `--tree`.
@@ -212,24 +212,80 @@ rune build production  # Building for target: production
 
 > **Note**: Required arguments must always precede default arguments in the signature.
 
-### Flags
+### Flags & Options
 
-Declare optional boolean flags using `--<name>?`:
+Declare task CLI options using boolean flags or valued options. Single-character short aliases can be paired with long option names using pipe syntax (`-<short>|--<long>`).
+
+#### Signature & Behaviour Matrix
+
+| Signature Syntax | Parameter Type | Status | Default | CLI Invocation | Value in `{{var}}` | Validation / Error |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `target` | Positional Argument | **Required** | - | `rune task app.go` | `"app.go"` | Error if omitted |
+| `target="dev"` | Positional Argument | **Optional** | `"dev"` | `rune task`<br>`rune task prod` | `"dev"`<br>`"prod"` | - |
+| `action=[up,down]="up"` | Positional Enum | **Optional** | `"up"` | `rune task`<br>`rune task down` | `"up"`<br>`"down"` | Error if value not in choices |
+| `action=[up,down]` | Positional Enum | **Required** | - | `rune task up` | `"up"` | Error if omitted or not in choices |
+| `-w\|--watch?` or `--watch?` | Boolean Flag | **Optional** | `false` | `rune task`<br>`rune task -w`<br>`rune task --watch` | `""` *(omitted)*<br>`"--watch"`<br>`"--watch"` | - |
+| `-t\|--token=` or `--token=` | String Option | **Required** | - | `rune task -t sec123`<br>`rune task --token=sec123` | `"sec123"`<br>`"sec123"` | Error if omitted or passed without value |
+| `-o\|--output="dist"` | String Option | **Optional** | `"dist"` | `rune task`<br>`rune task -o bin`<br>`rune task --output=bin` | `"dist"`<br>`"bin"`<br>`"bin"` | Error if passed without value |
+| `-t\|--tag=?` | String Option | **Optional** | `""` | `rune task`<br>`rune task -t v1.0` | `""`<br>`"v1.0"` | Error if passed without value |
+| `-e\|--env=[stg,prod]` | Enum Option | **Required** | - | `rune task -e stg`<br>`rune task --env=prod` | `"stg"`<br>`"prod"` | Error if omitted or not in choices |
+| `-m\|--mode=[a,b]="a"` | Enum Option | **Optional** | `"a"` | `rune task`<br>`rune task -m b` | `"a"`<br>`"b"` | Error if not in choices |
+| `*args` | Passthrough Args | **Optional** | `[]` | `rune task --extra "val"` | Passthrough list | - |
+
+#### 1. Boolean Flags (Switches)
+
+Options declared without `=` are boolean switches (`true`/`false`):
 
 ```text
-build target="dev" --race?:
-    go build {{race}} ./...
+build -w|--watch? target="dev":
+    go build {{watch}} ./...
 ```
 
 ```bash
-rune build
-rune build --race
-rune build production --race
+rune build                   # watch is false (expands to nothing)
+rune build -w                # watch is true (expands to --watch)
+rune build --watch           # watch is true (expands to --watch)
+rune build -w=false          # watch is false
 ```
 
-When `--race` is passed, `{{race}}` expands to `--race`. When omitted, it expands to nothing.
+#### 2. Valued Options
 
-If you mistype a flag, Rune calculates edit distance and suggests the intended option:
+Options declared with `=` accept string values. Both space and `=` syntax are supported:
+
+```text
+build -o|--output="dist" target="main.go":
+    go build -o {{output}}/app {{target}}
+```
+
+```bash
+rune build                   # output defaults to "dist"
+rune build -o bin            # output is "bin"
+rune build --output=bin      # output is "bin"
+```
+
+#### 3. Enum Choices Validation
+
+Constrain options or positional arguments to allowed values with `[choice1,choice2]`. Rune automatically validates inputs and rejects invalid values before running commands:
+
+```text
+deploy -e|--env=[staging,production] -m|--mode=[rolling,canary]="rolling":
+    ./deploy.sh --target={{env}} --strategy={{mode}}
+```
+
+```bash
+# Valid invocations
+rune deploy -e staging
+rune deploy --env=production --mode=canary
+
+# Invalid enum value fails fast with a clear error:
+rune deploy -e local
+# ✗ Invalid value "local" for option -e, --env=VALUE
+# Allowed choices: staging, production
+```
+
+Positional parameters also support enum choices (e.g. `db:migrate action=[up,down,status]="up":`).
+
+If you mistype an option, Rune suggests the closest candidate:
 
 ```bash
 rune build --rce
@@ -250,34 +306,36 @@ compose *args:
 rune compose exec api sh -c "echo 'Health check'" --user=root
 ```
 
-### Documenting Arguments & Flags (Doc-Comments)
+### Documenting Arguments & Options (Doc-Comments)
 
-Document task parameters and flags by placing a contiguous comment block directly before the task header:
+Document task parameters and options by placing a contiguous comment block directly before the task header:
 
-- Use `# --<flag>: Description` for boolean flags.
+- Use `# -s|--option: Description` or `# --option: Description` for options.
 - Use `# <arg>: Description` for positional arguments.
 - Use `# *<args>: Description` or `# <args>: Description` for passthrough arguments.
 
 ```text
-#[Build Android APK]
-# target: Target build environment (dev, staging, prod)
-# --split: Build split-per-ABI APKs alongside universal APK
-# --minify: Enable ProGuard/R8 code shrinking and obfuscation
-build:apk target="dev" --split? --minify?:
-    ./gradlew assembleRelease
+#[Deploy application to cloud infrastructure]
+# -e|--env: Target cloud environment
+# -o|--output: Build output folder
+# -w|--watch: Watch file changes
+# target: Entrypoint package
+deploy -e|--env=[staging,production] -o|--output="dist" -w|--watch? target="./cmd/app":
+    ./deploy.sh
 ```
 
-Running `rune build:apk --help` automatically renders these descriptions in the `Arguments:` and `Options:` tables:
+Running `rune deploy --help` automatically renders these descriptions, choices, defaults, and required markers:
 
 ```text
 Arguments:
-  target                Target build environment (dev, staging, prod) [default: "dev"]
+  target                  Entrypoint package [default: "./cmd/app"]
 
 Options:
-      --split           Build split-per-ABI APKs alongside universal APK
-      --minify          Enable ProGuard/R8 code shrinking and obfuscation
-  -h, --help            Display help for the given command
-  -v, --version         Display this application version
+  -e, --env=VALUE         Target cloud environment [choices: staging, production] (required)
+  -o, --output=VALUE      Build output folder [default: "dist"]
+  -w, --watch             Watch file changes
+  -h, --help              Display help for the given command
+  -v, --version           Display this application version
 ```
 
 > **Note**: Comments that do not match declared parameter names (such as developer notes `# NOTE: ...` or `# TODO: ...`), comments separated by blank lines, and comments inside the task body are completely ignored.

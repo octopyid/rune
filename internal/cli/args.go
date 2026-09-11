@@ -132,53 +132,175 @@ func BindTaskArgs(task *ast.Task, rawArgs []string) (*BoundArgs, error) {
 		PassthroughArgs: make([]string, 0),
 	}
 
-	// Initialize flags to false
+	// Initialize boolean flags to false
 	for _, f := range task.Flags {
-		bound.Flags[f.Name] = false
+		if !f.IsValued {
+			bound.Flags[f.Name] = false
+		}
 	}
 
-	// Collect defined flag names for validation and suggestion
-	definedFlags := make(map[string]bool)
+	// Collect flag candidates for typo suggestions
 	var flagCandidates []string
 	for _, f := range task.Flags {
-		definedFlags[f.Name] = true
 		flagCandidates = append(flagCandidates, "--"+f.Name)
+		if f.Short != "" {
+			flagCandidates = append(flagCandidates, "-"+f.Short)
+		}
 	}
 
+	suppliedOptions := make(map[string]bool)
 	var positionalInputs []string
 
 	i := 0
 	for i < len(rawArgs) {
 		arg := rawArgs[i]
 
-		// Check if it's a flag
-		if after, ok := strings.CutPrefix(arg, "--"); ok {
-			flagRaw := after
-			before, after, ok := strings.Cut(flagRaw, "=")
+		// Explicit end of options delimiter '--'
+		if arg == "--" {
+			i++
+			for i < len(rawArgs) {
+				if len(positionalInputs) < len(task.Parameters) {
+					positionalInputs = append(positionalInputs, rawArgs[i])
+				} else if task.Passthrough != nil {
+					bound.PassthroughArgs = append(bound.PassthroughArgs, rawArgs[i])
+				} else {
+					return nil, fmt.Errorf("unexpected argument: %s\n\nUsage:\n  %s", rawArgs[i], FormatUsage(task))
+				}
+				i++
+			}
+			break
+		}
 
-			var flagName, flagVal string
-			if ok {
-				flagName = before
-				flagVal = after
-			} else {
-				flagName = flagRaw
-				flagVal = "true"
+		// Long option: --foo or --foo=value
+		if strings.HasPrefix(arg, "--") {
+			optPart := strings.TrimPrefix(arg, "--")
+			optName, val, hasEqual := strings.Cut(optPart, "=")
+
+			var foundFlag *ast.Flag
+			for idx := range task.Flags {
+				if task.Flags[idx].Name == optName {
+					foundFlag = &task.Flags[idx]
+					break
+				}
 			}
 
-			if definedFlags[flagName] {
-				bound.Flags[flagName] = (flagVal == "true" || flagVal == "1" || flagVal == "")
+			if foundFlag != nil {
+				if foundFlag.IsValued {
+					var optVal string
+					if hasEqual {
+						optVal = val
+					} else {
+						if i+1 < len(rawArgs) {
+							optVal = rawArgs[i+1]
+							i++
+						} else {
+							return nil, fmt.Errorf("option '--%s' requires a value", foundFlag.Name)
+						}
+					}
+					if len(foundFlag.Choices) > 0 && !contains(foundFlag.Choices, optVal) {
+						return nil, fmt.Errorf("invalid value %q for option %s\nAllowed choices: %s", optVal, foundFlag.OptionPrefix(), strings.Join(foundFlag.Choices, ", "))
+					}
+					bound.Arguments[foundFlag.Name] = optVal
+					suppliedOptions[foundFlag.Name] = true
+					i++
+					continue
+				}
+
+				// Boolean flag
+				if hasEqual {
+					bound.Flags[foundFlag.Name] = (val == "true" || val == "1" || val == "")
+				} else {
+					bound.Flags[foundFlag.Name] = true
+				}
+				suppliedOptions[foundFlag.Name] = true
 				i++
 				continue
 			}
 
-			// If task has passthrough, unknown options belong to passthrough
+			// Unknown option with passthrough
 			if task.Passthrough != nil {
 				bound.PassthroughArgs = append(bound.PassthroughArgs, arg)
 				i++
 				continue
 			}
 
-			// Unknown option error with suggestion
+			err := fmt.Errorf("unknown option: %s", arg)
+			if sugg := Suggest(arg, flagCandidates); sugg != "" {
+				err = fmt.Errorf("unknown option: %s\n\nDid you mean:\n  %s", arg, sugg)
+			}
+			return nil, err
+		}
+
+		// Short option: -f, -f=value, or -f value
+		if strings.HasPrefix(arg, "-") && arg != "-" {
+			shortPart := strings.TrimPrefix(arg, "-")
+			shortName, val, hasEqual := strings.Cut(shortPart, "=")
+
+			var foundFlag *ast.Flag
+			var attachedVal string
+			var hasAttached bool
+
+			if len(shortName) == 1 {
+				for idx := range task.Flags {
+					if task.Flags[idx].Short == shortName {
+						foundFlag = &task.Flags[idx]
+						break
+					}
+				}
+			} else if !hasEqual && len(shortPart) > 1 {
+				firstChar := string(shortPart[0])
+				for idx := range task.Flags {
+					if task.Flags[idx].Short == firstChar && task.Flags[idx].IsValued {
+						foundFlag = &task.Flags[idx]
+						attachedVal = shortPart[1:]
+						hasAttached = true
+						break
+					}
+				}
+			}
+
+			if foundFlag != nil {
+				if foundFlag.IsValued {
+					var optVal string
+					if hasEqual {
+						optVal = val
+					} else if hasAttached {
+						optVal = attachedVal
+					} else {
+						if i+1 < len(rawArgs) {
+							optVal = rawArgs[i+1]
+							i++
+						} else {
+							return nil, fmt.Errorf("option '-%s' requires a value", foundFlag.Short)
+						}
+					}
+					if len(foundFlag.Choices) > 0 && !contains(foundFlag.Choices, optVal) {
+						return nil, fmt.Errorf("invalid value %q for option %s\nAllowed choices: %s", optVal, foundFlag.OptionPrefix(), strings.Join(foundFlag.Choices, ", "))
+					}
+					bound.Arguments[foundFlag.Name] = optVal
+					suppliedOptions[foundFlag.Name] = true
+					i++
+					continue
+				}
+
+				// Boolean flag
+				if hasEqual {
+					bound.Flags[foundFlag.Name] = (val == "true" || val == "1" || val == "")
+				} else {
+					bound.Flags[foundFlag.Name] = true
+				}
+				suppliedOptions[foundFlag.Name] = true
+				i++
+				continue
+			}
+
+			// Unknown option with passthrough
+			if task.Passthrough != nil {
+				bound.PassthroughArgs = append(bound.PassthroughArgs, arg)
+				i++
+				continue
+			}
+
 			err := fmt.Errorf("unknown option: %s", arg)
 			if sugg := Suggest(arg, flagCandidates); sugg != "" {
 				err = fmt.Errorf("unknown option: %s\n\nDid you mean:\n  %s", arg, sugg)
@@ -187,28 +309,52 @@ func BindTaskArgs(task *ast.Task, rawArgs []string) (*BoundArgs, error) {
 		}
 
 		// Positional argument
-		// If we haven't satisfied positional parameters, take it
 		if len(positionalInputs) < len(task.Parameters) {
 			positionalInputs = append(positionalInputs, arg)
 			i++
 			continue
 		}
 
-		// If all positional parameters are filled and task has passthrough, append to passthrough
+		// Passthrough argument
 		if task.Passthrough != nil {
 			bound.PassthroughArgs = append(bound.PassthroughArgs, arg)
 			i++
 			continue
 		}
 
-		// Extra positional argument without passthrough
+		// Extra positional argument
 		return nil, fmt.Errorf("unexpected argument: %s\n\nUsage:\n  %s", arg, FormatUsage(task))
 	}
 
-	// Now match positionalInputs against task.Parameters
+	// 1. Verify required options and apply option defaults
+	for _, f := range task.Flags {
+		if f.IsValued {
+			if suppliedOptions[f.Name] {
+				continue
+			}
+			if f.HasDefault {
+				bound.Arguments[f.Name] = f.DefaultValue
+				continue
+			}
+			// Missing required option
+			optDisplay := f.OptionPrefix()
+			return nil, fmt.Errorf("missing required option: %s\n\nUsage:\n  %s", optDisplay, FormatUsage(task))
+		}
+
+		if f.Required && !bound.Flags[f.Name] {
+			optDisplay := f.OptionPrefix()
+			return nil, fmt.Errorf("missing required option: %s\n\nUsage:\n  %s", optDisplay, FormatUsage(task))
+		}
+	}
+
+	// 2. Match positional inputs against task.Parameters
 	for idx, param := range task.Parameters {
 		if idx < len(positionalInputs) {
-			bound.Arguments[param.Name] = positionalInputs[idx]
+			val := positionalInputs[idx]
+			if len(param.Choices) > 0 && !contains(param.Choices, val) {
+				return nil, fmt.Errorf("invalid value %q for argument %q\nAllowed choices: %s", val, param.Name, strings.Join(param.Choices, ", "))
+			}
+			bound.Arguments[param.Name] = val
 		} else if param.HasDefault {
 			bound.Arguments[param.Name] = param.DefaultValue
 		} else {
@@ -219,10 +365,40 @@ func BindTaskArgs(task *ast.Task, rawArgs []string) (*BoundArgs, error) {
 	return bound, nil
 }
 
+func contains(list []string, item string) bool {
+	for _, v := range list {
+		if v == item {
+			return true
+		}
+	}
+	return false
+}
+
 // FormatUsage formats the usage string for a task.
 func FormatUsage(task *ast.Task) string {
 	var parts []string
 	parts = append(parts, "rune", task.Name)
+
+	for _, f := range task.Flags {
+		var optStr string
+		if f.Short != "" {
+			optStr = fmt.Sprintf("-%s|--%s", f.Short, f.Name)
+		} else {
+			optStr = "--" + f.Name
+		}
+		if f.IsValued {
+			if len(f.Choices) > 0 {
+				optStr += fmt.Sprintf("=[%s]", strings.Join(f.Choices, "|"))
+			} else {
+				optStr += "=VALUE"
+			}
+		}
+		if f.Required {
+			parts = append(parts, fmt.Sprintf("<%s>", optStr))
+		} else {
+			parts = append(parts, fmt.Sprintf("[%s]", optStr))
+		}
+	}
 
 	for _, param := range task.Parameters {
 		if param.HasDefault {
@@ -230,10 +406,6 @@ func FormatUsage(task *ast.Task) string {
 		} else {
 			parts = append(parts, fmt.Sprintf("<%s>", param.Name))
 		}
-	}
-
-	for _, f := range task.Flags {
-		parts = append(parts, fmt.Sprintf("[--%s]", f.Name))
 	}
 
 	if task.Passthrough != nil {

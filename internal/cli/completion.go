@@ -64,16 +64,40 @@ func Complete(file *ast.File, words []string) []string {
 
 	// If a task is already chosen, complete task flags and global flags
 	if foundTask != nil {
+		// Check if completing an option's choices with '=': e.g. --env= or -e=
+		if before, _, ok := strings.Cut(last, "="); ok {
+			if f, found := foundTask.FindFlag(before); found && len(f.Choices) > 0 {
+				var choiceCandidates []CompletionItem
+				for _, c := range f.Choices {
+					choiceCandidates = append(choiceCandidates, CompletionItem{
+						Value:       before + "=" + c,
+						Description: fmt.Sprintf("Choice for %s", before),
+					})
+				}
+				return filterPrefix(choiceCandidates, last)
+			}
+		}
+
 		var candidates []CompletionItem
 		for _, f := range foundTask.Flags {
 			desc := f.Description
 			if desc == "" {
-				desc = "Flag for " + foundTask.Name
+				if !f.IsValued {
+					desc = "Flag for " + foundTask.Name
+				} else {
+					desc = "Option for " + foundTask.Name
+				}
 			}
 			candidates = append(candidates, CompletionItem{
 				Value:       "--" + f.Name,
 				Description: desc,
 			})
+			if f.Short != "" {
+				candidates = append(candidates, CompletionItem{
+					Value:       "-" + f.Short,
+					Description: desc,
+				})
+			}
 		}
 		candidates = append(candidates, globalFlagsWithDesc...)
 		return filterPrefix(candidates, last)

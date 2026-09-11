@@ -28,16 +28,18 @@ func ExpandCommand(cmdLine string, bound *cli.BoundArgs) ([]string, error) {
 			continue
 		}
 
-		// 2. Check if token is a standalone flag placeholder like {{race}} or {{--race}}
+		// 2. Check if token is a standalone boolean flag placeholder like {{race}} or {{--race}}
 		if strings.HasPrefix(tok, "{{") && strings.HasSuffix(tok, "}}") {
 			varName := tok[2 : len(tok)-2]
 			flagName := strings.TrimPrefix(varName, "--")
-			if bound != nil && bound.Task != nil && bound.Task.HasFlag(flagName) {
-				if bound.Flags[flagName] {
-					argv = append(argv, "--"+flagName)
+			if bound != nil && bound.Task != nil {
+				if flag, ok := bound.Task.FindFlag(flagName); ok && !flag.IsValued {
+					if bound.Flags[flag.Name] {
+						argv = append(argv, "--"+flag.Name)
+					}
+					// If false, omit token
+					continue
 				}
-				// If false, omit token
-				continue
 			}
 		}
 
@@ -58,13 +60,15 @@ func interpolateString(s string, bound *cli.BoundArgs) string {
 	}
 
 	result := s
-	// Replace arguments
+	// Replace arguments (positional parameters and valued options)
 	for k, v := range bound.Arguments {
 		placeholder := "{{" + k + "}}"
 		result = strings.ReplaceAll(result, placeholder, v)
+		phDash := "{{--" + k + "}}"
+		result = strings.ReplaceAll(result, phDash, v)
 	}
 
-	// Replace flags
+	// Replace boolean flags
 	for k, val := range bound.Flags {
 		ph1 := "{{" + k + "}}"
 		ph2 := "{{--" + k + "}}"

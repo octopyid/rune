@@ -88,6 +88,33 @@ func TestExpandCommand(t *testing.T) {
 			t.Errorf("arg %d: expected %s, got %s", i, exp, argv[i])
 		}
 	}
+
+	// 5. Valued option expansion
+	taskWithValued := &ast.Task{
+		Name: "build",
+		Flags: []ast.Flag{
+			{Short: "o", Name: "output", IsValued: true},
+		},
+	}
+	boundValued := &cli.BoundArgs{
+		Task: taskWithValued,
+		Arguments: map[string]string{
+			"output": "bin/app",
+		},
+	}
+	argv, err = ExpandCommand("go build -o {{output}} ./...", boundValued)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected = []string{"go", "build", "-o", "bin/app", "./..."}
+	if len(argv) != len(expected) {
+		t.Fatalf("expected %d args, got %d: %+v", len(expected), len(argv), argv)
+	}
+	for i, exp := range expected {
+		if argv[i] != exp {
+			t.Errorf("arg %d: expected %s, got %s", i, exp, argv[i])
+		}
+	}
 }
 
 func TestConfirmExecution(t *testing.T) {

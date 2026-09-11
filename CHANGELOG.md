@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CLI Task Options & Enum Choices**:
+  - **Short Option Aliases (`-s|--long`)**: Define single-character short aliases alongside long option names (e.g. `-w|--watch?`, `-o|--output="dist"`).
+  - **Valued Options (`--option=`)**: Support options requiring or accepting values using `=`, with required (`--token=`), optional default (`--output="dist"`), and empty default (`--tag=?`) semantics.
+  - **Enum Choices Validation (`[a,b,c]`)**: Constrain options and positional arguments to allowed choices (e.g. `-e|--env=[staging,production]`, `action=[up,down]="up"`). Invalid inputs trigger immediate fail-fast validation errors listing allowed choices.
+  - **Auto-Generated Help Menu Enhancements**: Option help outputs automatically format short aliases (`-e, --env=VALUE`), allowed choices (`[choices: staging, production]`), defaults (`[default: "dist"]`), and required markers (`(required)`).
+  - **Autocompletion for Options & Choices**: Shell completions suggest short flags (`-w`), long flags (`--watch`), and complete enum choices upon typing `--env=` or `-e=`.
+
 ## [1.5.0] - 2026-09-11
 
 ### Added
