@@ -310,9 +310,9 @@ rune compose exec api sh -c "echo 'Health check'" --user=root
 
 Document task parameters and options by placing a contiguous comment block directly before the task header:
 
-- Use `# -s|--option: Description` or `# --option: Description` for options.
-- Use `# <arg>: Description` for positional arguments.
-- Use `# *<args>: Description` or `# <args>: Description` for passthrough arguments.
+- **Options with short aliases**: Use `# -s|--option: Description`, `# --option: Description`, or `# -s: Description` (all formats bind to the same option and share the description across `--help` and autocomplete).
+- **Positional arguments**: Use `# <arg>: Description`.
+- **Passthrough arguments**: Use `# *<args>: Description` or `# <args>: Description`.
 
 ```text
 #[Deploy application to cloud infrastructure]
