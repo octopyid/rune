@@ -468,3 +468,210 @@ func TestTreeGlobalFlagAndRouting(t *testing.T) {
 		t.Errorf("expected suggestions to include --tree, got %v", suggestions)
 	}
 }
+
+func TestBindTaskArgsWithOptionsAndEnums(t *testing.T) {
+	task := &ast.Task{
+		Name: "deploy",
+		Flags: []ast.Flag{
+			{
+				Short:    "w",
+				Name:     "watch",
+				IsValued: false,
+			},
+			{
+				Short:        "o",
+				Name:         "output",
+				IsValued:     true,
+				HasDefault:   true,
+				DefaultValue: "dist",
+			},
+			{
+				Short:    "e",
+				Name:     "env",
+				IsValued: true,
+				Required: true,
+				Choices:  []string{"staging", "production"},
+			},
+		},
+		Parameters: []ast.Parameter{
+			{
+				Name:         "action",
+				Choices:      []string{"up", "down"},
+				HasDefault:   true,
+				DefaultValue: "up",
+			},
+		},
+	}
+
+	// 1. Missing required option
+	_, err := BindTaskArgs(task, nil)
+	if err == nil {
+		t.Fatal("expected error for missing required option, got nil")
+	}
+	if !strings.Contains(err.Error(), "missing required option: -e, --env") {
+		t.Errorf("expected missing required option error, got %v", err)
+	}
+
+	// 2. Valid invocation with short flags and space
+	bound, err := BindTaskArgs(task, []string{"-w", "-e", "staging", "-o", "build", "down"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bound.Flags["watch"] {
+		t.Error("expected watch=true")
+	}
+	if bound.Arguments["env"] != "staging" {
+		t.Errorf("expected env=staging, got %s", bound.Arguments["env"])
+	}
+	if bound.Arguments["output"] != "build" {
+		t.Errorf("expected output=build, got %s", bound.Arguments["output"])
+	}
+	if bound.Arguments["action"] != "down" {
+		t.Errorf("expected action=down, got %s", bound.Arguments["action"])
+	}
+
+	// 3. Valid invocation with long flags and equal
+	bound, err = BindTaskArgs(task, []string{"--env=production", "--output=custom"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if bound.Flags["watch"] {
+		t.Error("expected watch=false")
+	}
+	if bound.Arguments["env"] != "production" {
+		t.Errorf("expected env=production, got %s", bound.Arguments["env"])
+	}
+	if bound.Arguments["output"] != "custom" {
+		t.Errorf("expected output=custom, got %s", bound.Arguments["output"])
+	}
+	if bound.Arguments["action"] != "up" {
+		t.Errorf("expected default action=up, got %s", bound.Arguments["action"])
+	}
+
+	// 4. Invalid enum choice for option
+	_, err = BindTaskArgs(task, []string{"-e", "local"})
+	if err == nil {
+		t.Fatal("expected error for invalid enum option choice, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid value \"local\" for option -e, --env=VALUE") {
+		t.Errorf("expected invalid value error, got %v", err)
+	}
+
+	// 5. Invalid enum choice for positional argument
+	_, err = BindTaskArgs(task, []string{"-e", "staging", "invalid_action"})
+	if err == nil {
+		t.Fatal("expected error for invalid positional choice, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid value \"invalid_action\" for argument \"action\"") {
+		t.Errorf("expected invalid argument choice error, got %v", err)
+	}
+
+	// 6. Option requiring value without value
+	_, err = BindTaskArgs(task, []string{"-e"})
+	if err == nil {
+		t.Fatal("expected error for missing value, got nil")
+	}
+	if !strings.Contains(err.Error(), "option '-e' requires a value") {
+		t.Errorf("expected option requires value error, got %v", err)
+	}
+
+	_, err = BindTaskArgs(task, []string{"--output"})
+	if err == nil {
+		t.Fatal("expected error for missing value on long option, got nil")
+	}
+	if !strings.Contains(err.Error(), "option '--output' requires a value") {
+		t.Errorf("expected option requires value error, got %v", err)
+	}
+}
+
+func TestTaskHelpWithOptionsAndEnums(t *testing.T) {
+	task := &ast.Task{
+		Name:        "deploy",
+		Description: "Deploy application",
+		Flags: []ast.Flag{
+			{
+				Short:       "w",
+				Name:        "watch",
+				Description: "Watch files",
+			},
+			{
+				Short:        "o",
+				Name:         "output",
+				Description:  "Output folder",
+				IsValued:     true,
+				HasDefault:   true,
+				DefaultValue: "dist",
+			},
+			{
+				Short:       "e",
+				Name:        "env",
+				Description: "Cloud target",
+				IsValued:    true,
+				Required:    true,
+				Choices:     []string{"staging", "production"},
+			},
+		},
+		Parameters: []ast.Parameter{
+			{
+				Name:         "action",
+				Description:  "Migration action",
+				Choices:      []string{"up", "down"},
+				HasDefault:   true,
+				DefaultValue: "up",
+			},
+		},
+	}
+
+	help := FormatTaskHelp(task)
+
+	// Verify help formatting
+	if !strings.Contains(help, "-w, --watch") {
+		t.Errorf("expected '-w, --watch' in help, got:\n%s", help)
+	}
+	if !strings.Contains(help, "-o, --output=VALUE") || !strings.Contains(help, "[default: \"dist\"]") {
+		t.Errorf("expected output option and default in help, got:\n%s", help)
+	}
+	if !strings.Contains(help, "-e, --env=VALUE") || !strings.Contains(help, "[choices: staging, production]") || !strings.Contains(help, "(required)") {
+		t.Errorf("expected env option, choices, and (required) in help, got:\n%s", help)
+	}
+	if !strings.Contains(help, "action") || !strings.Contains(help, "[choices: up, down]") {
+		t.Errorf("expected action argument with choices in help, got:\n%s", help)
+	}
+}
+
+func TestCompletionWithOptionsAndEnums(t *testing.T) {
+	task := &ast.Task{
+		Name: "deploy",
+		Flags: []ast.Flag{
+			{Short: "w", Name: "watch"},
+			{Short: "e", Name: "env", IsValued: true, Choices: []string{"staging", "production"}},
+		},
+	}
+	file := ast.NewFile("Runefile", []*ast.Task{task})
+
+	// 1. Typing 'rune deploy -' suggests short flag '-w', '-e' and long flags '--watch', '--env'
+	cands := Complete(file, []string{"deploy", "-"})
+	foundShortW := false
+	foundLongEnv := false
+	for _, c := range cands {
+		val := strings.Split(c, "\t")[0]
+		if val == "-w" {
+			foundShortW = true
+		}
+		if val == "--env" {
+			foundLongEnv = true
+		}
+	}
+	if !foundShortW || !foundLongEnv {
+		t.Errorf("expected -w and --env in completions, got %v", cands)
+	}
+
+	// 2. Typing 'rune deploy -e=' or '--env=' suggests choices
+	choiceCands := Complete(file, []string{"deploy", "-e="})
+	if len(choiceCands) != 2 {
+		t.Fatalf("expected 2 choices, got %d: %v", len(choiceCands), choiceCands)
+	}
+	if !strings.Contains(choiceCands[0], "-e=staging") || !strings.Contains(choiceCands[1], "-e=production") {
+		t.Errorf("expected -e=staging and -e=production, got %v", choiceCands)
+	}
+}

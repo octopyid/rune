@@ -260,10 +260,18 @@ func FormatTaskHelp(task *ast.Task) string {
 			if desc == "" {
 				desc = "Required argument"
 				if p.HasDefault {
-					desc = fmt.Sprintf("Optional argument [default: %q]", p.DefaultValue)
+					desc = "Optional argument"
 				}
-			} else if p.HasDefault {
-				desc = fmt.Sprintf("%s [default: %q]", p.Description, p.DefaultValue)
+			}
+			var meta []string
+			if len(p.Choices) > 0 {
+				meta = append(meta, fmt.Sprintf("[choices: %s]", strings.Join(p.Choices, ", ")))
+			}
+			if p.HasDefault {
+				meta = append(meta, fmt.Sprintf("[default: %q]", p.DefaultValue))
+			}
+			if len(meta) > 0 {
+				desc = fmt.Sprintf("%s %s", desc, strings.Join(meta, " "))
 			}
 			fmt.Fprintf(&sb, "  %s%s%s\n", colorCmd(p.Name), padding, desc)
 		}
@@ -283,7 +291,15 @@ func FormatTaskHelp(task *ast.Task) string {
 	// Calculate maximum column width across task-specific flags AND global options
 	optWidth := 24
 	for _, f := range task.Flags {
-		prefix := fmt.Sprintf("      --%s", f.Name)
+		shortStr := ""
+		if f.Short != "" {
+			shortStr = "-" + f.Short
+		}
+		longStr := "--" + f.Name
+		if f.IsValued {
+			longStr += "=VALUE"
+		}
+		prefix := formatOptionPrefix(shortStr, longStr)
 		if len(prefix)+2 > optWidth {
 			optWidth = len(prefix) + 2
 		}
@@ -297,13 +313,43 @@ func FormatTaskHelp(task *ast.Task) string {
 
 	// 1. Task-specific flags first
 	for _, f := range task.Flags {
-		prefix := fmt.Sprintf("      --%s", f.Name)
+		shortStr := ""
+		if f.Short != "" {
+			shortStr = "-" + f.Short
+		}
+		longStr := "--" + f.Name
+		if f.IsValued {
+			longStr += "=VALUE"
+		}
+		prefix := formatOptionPrefix(shortStr, longStr)
 		padding := strings.Repeat(" ", max(2, optWidth-len(prefix)))
+
 		desc := f.Description
 		if desc == "" {
-			desc = "Optional boolean flag"
+			if !f.IsValued {
+				desc = "Optional boolean flag"
+			} else {
+				desc = "Task option"
+			}
 		}
-		fmt.Fprintf(&sb, "      %s%s%s\n", colorOption("--"+f.Name), padding, desc)
+		var meta []string
+		if len(f.Choices) > 0 {
+			meta = append(meta, fmt.Sprintf("[choices: %s]", strings.Join(f.Choices, ", ")))
+		}
+		if f.Required {
+			meta = append(meta, "(required)")
+		} else if f.HasDefault && f.IsValued {
+			meta = append(meta, fmt.Sprintf("[default: %q]", f.DefaultValue))
+		}
+		if len(meta) > 0 {
+			desc = fmt.Sprintf("%s %s", desc, strings.Join(meta, " "))
+		}
+
+		if shortStr != "" {
+			fmt.Fprintf(&sb, "  %s%s%s\n", colorOption(shortStr+", "+longStr), padding, desc)
+		} else {
+			fmt.Fprintf(&sb, "      %s%s%s\n", colorOption(longStr), padding, desc)
+		}
 	}
 
 	// 2. Global options next (perfectly aligned with task flags)

@@ -575,3 +575,72 @@ clean:
 		}
 	}
 }
+
+func TestE2EOptionsAndEnums(t *testing.T) {
+	tmpDir := t.TempDir()
+	rf := `
+#[Build and deploy service]
+# -e|--env: Deployment environment
+# -o|--output: Output directory
+# -w|--watch: Watch mode
+# target: Target app
+deploy -e|--env=[staging,production] -o|--output="dist" -w|--watch? target="main.go":
+    echo "DEPLOY env={{env}} output={{output}} watch={{watch}} target={{target}}"
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "Runefile"), []byte(rf), 0644); err != nil {
+		t.Fatalf("failed to write Runefile: %v", err)
+	}
+
+	// 1. Missing required option
+	stdout, stderr, code := runRune(tmpDir, "", "deploy")
+	if code == 0 {
+		t.Fatalf("expected failure for missing required option, got code 0. stdout: %s", stdout)
+	}
+	if !strings.Contains(stderr, "Missing required option: -e, --env") {
+		t.Errorf("expected missing required option in stderr, got: %s", stderr)
+	}
+
+	// 2. Invalid enum value
+	stdout, stderr, code = runRune(tmpDir, "", "deploy", "-e", "local")
+	if code == 0 {
+		t.Fatalf("expected failure for invalid enum, got code 0. stdout: %s", stdout)
+	}
+	if !strings.Contains(stderr, "Invalid value \"local\" for option -e, --env=VALUE") || !strings.Contains(stderr, "staging, production") {
+		t.Errorf("expected invalid enum choice error, got: %s", stderr)
+	}
+
+	// 3. Successful invocation with short options and space
+	stdout, stderr, code = runRune(tmpDir, "", "deploy", "-e", "staging", "-o", "bin", "-w", "worker.go")
+	if code != 0 {
+		t.Fatalf("expected code 0, got %d. stderr: %s", code, stderr)
+	}
+	expectedOutput := "DEPLOY env=staging output=bin watch=--watch target=worker.go"
+	if !strings.Contains(stdout, expectedOutput) {
+		t.Errorf("expected output to contain %q, got:\n%s", expectedOutput, stdout)
+	}
+
+	// 4. Successful invocation with long options and equal, defaults applied
+	stdout, stderr, code = runRune(tmpDir, "", "deploy", "--env=production")
+	if code != 0 {
+		t.Fatalf("expected code 0, got %d. stderr: %s", code, stderr)
+	}
+	expectedDefault := "DEPLOY env=production output=dist watch= target=main.go"
+	if !strings.Contains(stdout, expectedDefault) {
+		t.Errorf("expected output to contain %q, got:\n%s", expectedDefault, stdout)
+	}
+
+	// 5. Help output displays choices and options correctly
+	stdout, stderr, code = runRune(tmpDir, "", "deploy", "--help")
+	if code != 0 {
+		t.Fatalf("expected code 0 for help, got %d. stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "-e, --env=VALUE") || !strings.Contains(stdout, "[choices: staging, production]") || !strings.Contains(stdout, "(required)") {
+		t.Errorf("expected help to contain env option details, got:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "-o, --output=VALUE") || !strings.Contains(stdout, "[default: \"dist\"]") {
+		t.Errorf("expected help to contain output option default, got:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "-w, --watch") {
+		t.Errorf("expected help to contain watch flag, got:\n%s", stdout)
+	}
+}

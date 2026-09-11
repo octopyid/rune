@@ -1,6 +1,9 @@
 package ast
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // Parameter represents a positional task argument.
 type Parameter struct {
@@ -8,17 +11,46 @@ type Parameter struct {
 	DefaultValue string
 	HasDefault   bool
 	Description  string
+	Choices      []string // allowed enum choices (e.g. ["up", "down"])
 }
 
-// Flag represents an optional boolean flag (e.g., --race?).
+// Flag represents a task CLI option (boolean flag or valued option).
 type Flag struct {
-	Name        string // e.g. "race"
-	Description string
+	Short        string   // single-character short alias without dash, e.g. "w" or ""
+	Name         string   // long option name without dashes, e.g. "watch"
+	Description  string   // option description
+	IsValued     bool     // true if option takes a value (declared with '=')
+	Required     bool     // true if option is required (no default value)
+	DefaultValue string   // default value when omitted
+	HasDefault   bool     // true if default value is specified
+	Choices      []string // allowed enum choices (e.g. ["staging", "production"])
 }
 
 // FullName returns the CLI flag with dashes, e.g. "--race".
 func (f Flag) FullName() string {
 	return "--" + f.Name
+}
+
+// ShortName returns the short CLI flag with single dash, e.g. "-r", or empty if no short alias.
+func (f Flag) ShortName() string {
+	if f.Short == "" {
+		return ""
+	}
+	return "-" + f.Short
+}
+
+// OptionPrefix returns the formatted option signature for help menus (e.g. "-w, --watch" or "-e, --env=VALUE").
+func (f Flag) OptionPrefix() string {
+	var prefix string
+	if f.Short != "" {
+		prefix = fmt.Sprintf("-%s, --%s", f.Short, f.Name)
+	} else {
+		prefix = "--" + f.Name
+	}
+	if f.IsValued {
+		prefix += "=VALUE"
+	}
+	return prefix
 }
 
 // Passthrough represents explicit passthrough arguments (e.g., *args).
@@ -38,22 +70,35 @@ type Task struct {
 	Env          map[string]string // task-scoped environment variables
 	Private      bool              // whether task is hidden from listing and autocompletion
 	Parameters   []Parameter       // positional arguments (required and default)
-	Flags        []Flag            // optional boolean flags
+	Flags        []Flag            // task CLI options (boolean flags and valued options)
 	Passthrough  *Passthrough      // optional passthrough (*args)
 	Dependencies []string          // task dependency names
 	Commands     []string          // command lines to execute
 	Line         int               // source line number
 }
 
-// HasFlag checks whether a flag with the given name exists in this task.
+// HasFlag checks whether a flag with the given name (long or short) exists in this task.
 func (t *Task) HasFlag(name string) bool {
 	clean := strings.TrimPrefix(name, "--")
+	cleanShort := strings.TrimPrefix(name, "-")
 	for _, f := range t.Flags {
-		if f.Name == clean {
+		if f.Name == clean || (f.Short != "" && f.Short == cleanShort) {
 			return true
 		}
 	}
 	return false
+}
+
+// FindFlag finds a flag by long name or short alias.
+func (t *Task) FindFlag(name string) (*Flag, bool) {
+	clean := strings.TrimPrefix(name, "--")
+	cleanShort := strings.TrimPrefix(name, "-")
+	for i := range t.Flags {
+		if t.Flags[i].Name == clean || (t.Flags[i].Short != "" && t.Flags[i].Short == cleanShort) {
+			return &t.Flags[i], true
+		}
+	}
+	return nil, false
 }
 
 // File represents a parsed Runefile containing all tasks.
